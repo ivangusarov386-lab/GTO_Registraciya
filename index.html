@@ -3,46 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1a3a">
+  <meta name="description" content="Запись на сдачу нормативов комплекса «Готов к труду и обороне»">
   <title>Регистрация на ГТО</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d62b2b'/%3E%3Cpath fill='%23fff' d='M32 11l6.2 12.6 13.8 2-10 9.8 2.4 13.8L32 42.7l-12.4 6.5L22 35.4 12 25.6l13.8-2z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand">
+        <svg class="brand-star" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M32 6l7.6 15.4 17 2.5-12.3 12 2.9 16.9L32 44.8l-15.2 8 2.9-16.9-12.3-12 17-2.5z"/>
+        </svg>
+        <span class="brand-text">ГТО</span>
+      </div>
+      <h1>Запись на сдачу нормативов</h1>
+      <p class="hero-sub">Всероссийский физкультурно-спортивный комплекс «Готов к труду и обороне»</p>
+
+      <ol class="progress" id="progress" aria-label="Этапы регистрации">
+        <li class="is-active"><span class="progress-num">1</span><span class="progress-text">Дата</span></li>
+        <li><span class="progress-num">2</span><span class="progress-text">Анкета</span></li>
+        <li><span class="progress-num">3</span><span class="progress-text">Готово</span></li>
+      </ol>
+    </div>
+  </header>
+
   <main class="card">
-    <header>
-      <div class="badge">ГТО</div>
-      <h1>Регистрация на сдачу нормативов</h1>
-      <p class="muted">«Готов к труду и обороне»</p>
-    </header>
-
     <form id="form" novalidate>
-      <fieldset>
-        <legend>Дата сдачи</legend>
-        <div id="dates" class="dates"><p class="muted">Загрузка…</p></div>
-      </fieldset>
+      <section class="section" aria-labelledby="dates-title">
+        <h2 class="section-title" id="dates-title"><span class="section-num">1</span>Выберите дату сдачи</h2>
+        <div id="dates" class="dates" aria-live="polite">
+          <div class="skeleton"></div>
+          <div class="skeleton"></div>
+        </div>
+      </section>
 
-      <div id="fields" class="fields"></div>
+      <section class="section" id="details" aria-labelledby="details-title" hidden>
+        <h2 class="section-title" id="details-title"><span class="section-num">2</span>Данные участника</h2>
+        <div id="fields" class="fields"></div>
+      </section>
 
-      <p id="message" class="message" role="status" hidden></p>
+      <p id="message" class="message" role="alert" hidden></p>
 
-      <button type="submit" id="submit" hidden>Зарегистрироваться</button>
+      <button type="submit" id="submit" class="btn btn-primary btn-submit" hidden>
+        <span class="btn-label">Зарегистрироваться</span>
+      </button>
     </form>
+
+    <section id="done" class="done" hidden aria-live="polite">
+      <div class="done-icon" aria-hidden="true">
+        <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
+      </div>
+      <h2 id="done-title">Вы записаны!</h2>
+      <p id="done-text" class="done-text"></p>
+      <dl id="done-details" class="done-details"></dl>
+      <button type="button" id="again" class="btn btn-secondary">Записать ещё одного участника</button>
+    </section>
   </main>
 
-  <dialog id="rules" class="rules" aria-labelledby="rules-title">
-    <h2 id="rules-title">Перед регистрацией</h2>
-    <div id="rules-text" class="rules-text"></div>
-    <div class="rules-actions">
-      <button type="button" id="rules-accept">На сайте ГТО зарегистрирован</button>
-      <a href="https://www.gto.ru/" target="_blank" rel="noopener" class="button secondary">Не зарегистрирован на сайте ГТО</a>
+  <footer class="footer">
+    <p>Перед сдачей нормативов участник должен быть зарегистрирован на
+      <a href="https://www.gto.ru/" target="_blank" rel="noopener">gto.ru</a>
+      и иметь медицинский допуск.</p>
+  </footer>
+
+  <dialog id="rules" class="modal" aria-labelledby="rules-title">
+    <div class="modal-head">
+      <span class="modal-icon" aria-hidden="true">i</span>
+      <h2 id="rules-title">Перед регистрацией</h2>
+    </div>
+    <div id="rules-text" class="modal-body"></div>
+    <div class="modal-actions">
+      <button type="button" id="rules-accept" class="btn btn-primary">На сайте ГТО зарегистрирован</button>
+      <a href="https://www.gto.ru/" target="_blank" rel="noopener" class="btn btn-secondary">Не зарегистрирован на сайте ГТО</a>
     </div>
   </dialog>
 
-  <dialog id="confirm" class="rules" aria-labelledby="confirm-title">
-    <h2 id="confirm-title">Участник уже записан</h2>
-    <div id="confirm-text" class="rules-text"></div>
-    <div class="rules-actions">
-      <button type="button" id="confirm-yes">Да, отредактировать</button>
-      <button type="button" id="confirm-no" class="secondary">Нет</button>
+  <dialog id="confirm" class="modal" aria-labelledby="confirm-title">
+    <div class="modal-head">
+      <span class="modal-icon" aria-hidden="true">!</span>
+      <h2 id="confirm-title">Участник уже записан</h2>
+    </div>
+    <div id="confirm-text" class="modal-body"></div>
+    <div class="modal-actions">
+      <button type="button" id="confirm-yes" class="btn btn-primary">Да, отредактировать</button>
+      <button type="button" id="confirm-no" class="btn btn-secondary">Нет</button>
     </div>
   </dialog>
 

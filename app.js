@@ -9,6 +9,9 @@
   var fieldsBox = document.getElementById("fields");
   var submitBtn = document.getElementById("submit");
   var message = document.getElementById("message");
+  var detailsBox = document.getElementById("details");
+  var doneBox = document.getElementById("done");
+  var progressSteps = document.querySelectorAll("#progress li");
 
   var rulesDialog = document.getElementById("rules");
   var rulesText = document.getElementById("rules-text");
@@ -18,7 +21,10 @@
   var rulesAccepted = false;
   var current = null; // выбранный лист
 
-  var GENDER_NAMES = { "м": "Муж.", "ж": "Жен." };
+  var GENDER_NAMES = { "м": "Мужской", "ж": "Женский" };
+  var MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  var MONTHS_FULL = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  var WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
   var PLACEHOLDERS = {
     fio: "Иванов Иван Иванович",
     uin: "00-00-0000000",
@@ -40,6 +46,30 @@
   document.addEventListener("close", function () {
     if (!document.querySelector("dialog[open]")) document.documentElement.classList.remove("modal-open");
   }, true);
+
+  // Отмечает текущий этап в шапке: 1 — дата, 2 — анкета, 3 — готово.
+  function setStep(n) {
+    progressSteps.forEach(function (li, i) {
+      li.classList.toggle("is-done", i + 1 < n);
+      li.classList.toggle("is-active", i + 1 === n);
+      if (i + 1 === n) li.setAttribute("aria-current", "step");
+      else li.removeAttribute("aria-current");
+    });
+  }
+
+  // «23.11.26» → { day: "23", month: "ноя", short: "23 ноября", full: "23 ноября 2026", weekday: "понедельник" }
+  function parseDate(s) {
+    var m = /^(\d{2})\.(\d{2})\.(\d{2})$/.exec(s);
+    if (!m) return null;
+    var d = new Date(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    return {
+      day: String(Number(m[1])),
+      month: MONTHS[d.getMonth()],
+      short: Number(m[1]) + " " + MONTHS_FULL[d.getMonth()],
+      full: Number(m[1]) + " " + MONTHS_FULL[d.getMonth()] + " " + d.getFullYear(),
+      weekday: WEEKDAYS[d.getDay()],
+    };
+  }
 
   function caption(label) {
     return label.charAt(0).toUpperCase() + label.slice(1);
@@ -64,14 +94,24 @@
   function renderDates() {
     datesBox.innerHTML = "";
     if (!sheets.length) {
-      datesBox.appendChild(el("p", { class: "muted", text: "Сейчас нет открытых дат для записи." }));
+      datesBox.appendChild(el("p", { class: "empty", text: "Сейчас нет открытых дат для записи." }));
       return;
     }
     sheets.forEach(function (s, i) {
       var input = el("input", { type: "radio", name: "sheet", value: String(i) });
       input.addEventListener("change", function () { chooseSheet(i); });
-      var card = el("span", { class: "date" }, [el("b", { text: s.date })]);
-      if (s.label) card.appendChild(el("span", { class: "label", text: s.label }));
+      var d = parseDate(s.date);
+      var info = el("span", { class: "date-info" });
+      if (s.label) info.appendChild(el("span", { class: "date-label", text: s.label }));
+      info.appendChild(el("span", { class: "date-sub", text: d ? d.short + ", " + d.weekday : s.date }));
+      var card = el("span", { class: "date" }, [
+        el("span", { class: "date-cal", "aria-hidden": "true" }, [
+          el("span", { class: "date-month", text: d ? d.month : "" }),
+          el("span", { class: "date-day", text: d ? d.day : s.date }),
+        ]),
+        info,
+        el("span", { class: "date-check", "aria-hidden": "true" }),
+      ]);
       datesBox.appendChild(el("label", {}, [input, card]));
     });
     if (sheets.length === 1) {
@@ -102,10 +142,17 @@
   function selectSheet(i) {
     // Сохраняем уже введённые значения, если такие же поля есть на другой дате.
     var prev = current ? collect() : {};
+    var first = !current;
     current = sheets[i];
     hideMessage();
     renderFields(prev);
+    detailsBox.hidden = false;
     submitBtn.hidden = false;
+    setStep(2);
+    // На телефоне анкета ниже экрана — плавно прокручиваем к ней при первом выборе даты.
+    if (first && detailsBox.getBoundingClientRect().top > window.innerHeight * 0.7) {
+      detailsBox.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   /* ---------- Поля формы ---------- */
@@ -127,9 +174,10 @@
 
       var wrap = control.tagName === "FIELDSET"
         ? control
-        : el("label", { for: id }, [el("span", { text: caption(f.label) }), control]);
+        : el("label", { for: id, class: "field" }, [el("span", { class: "field-label", text: caption(f.label) }), control]);
+      if (f.kind === "fio" || f.kind === "uin" || f.kind === "text") wrap.classList.add("field-wide");
       if (f.kind === "uin") {
-        wrap.appendChild(el("small", { class: "muted hint", text: "Номер из личного кабинета на gto.ru" }));
+        wrap.appendChild(el("small", { class: "hint", text: "11 цифр из личного кабинета на gto.ru" }));
       }
       fieldsBox.appendChild(wrap);
       setValue(f, id, prev[f.label]);
@@ -158,7 +206,7 @@
         el("span", { text: name }),
       ]));
     });
-    return el("fieldset", {}, [el("legend", { text: caption(f.label) }), group]);
+    return el("fieldset", { class: "field" }, [el("legend", { class: "field-label", text: caption(f.label) }), group]);
   }
 
   function renderInput(f, id) {
@@ -217,7 +265,7 @@
       if (problem) {
         errors.push(problem);
         var node = document.getElementById("f" + i);
-        if (node && node.tagName !== "DIV") node.classList.add("invalid");
+        if (node) node.classList.add("invalid");
       }
     });
     return errors;
@@ -364,9 +412,54 @@
     }
   });
 
+  /* ---------- Экран «Вы записаны» ---------- */
+
+  function showDone(values, res) {
+    var fioField = current.fields.filter(function (f) { return f.kind === "fio"; })[0];
+    var fio = fioField ? values[fioField.label] : "";
+    document.getElementById("done-title").textContent = res.updated ? "Данные обновлены" : "Вы записаны!";
+    document.getElementById("done-text").textContent = res.updated
+      ? "Изменения сохранены в списке участников."
+      : "Заявка принята. Ждём вас на сдаче нормативов.";
+
+    var d = parseDate(res.date || current.date);
+    var rows = [
+      ["Участник", fio],
+      ["Дата", (d ? d.full + ", " + d.weekday : current.date)],
+      ["Группа", current.label],
+      ["Номер в списке", String(res.number)],
+    ];
+    var dl = document.getElementById("done-details");
+    dl.innerHTML = "";
+    rows.forEach(function (r) {
+      if (!r[1]) return;
+      dl.appendChild(el("dt", { text: r[0] }));
+      dl.appendChild(el("dd", { text: r[1] }));
+    });
+
+    form.hidden = true;
+    doneBox.hidden = false;
+    setStep(3);
+    doneBox.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  document.getElementById("again").addEventListener("click", function () {
+    doneBox.hidden = true;
+    form.hidden = false;
+    hideMessage();
+    renderFields({});
+    setStep(2);
+    detailsBox.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+    submitBtn.classList.toggle("is-loading", on);
+    submitBtn.querySelector(".btn-label").textContent = on ? "Отправка…" : "Зарегистрироваться";
+  }
+
   function send(values, update) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Отправка…";
+    setLoading(true);
 
     // text/plain — чтобы браузер не отправлял preflight-запрос, который Apps Script не поддерживает.
     fetch(SCRIPT_URL, {
@@ -377,11 +470,7 @@
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (res.ok) {
-          var fio = values[(current.fields.filter(function (f) { return f.kind === "fio"; })[0] || {}).label] || "Участник";
-          showMessage(res.updated
-            ? "Данные обновлены: " + fio + ", " + res.title + ". Номер в списке: " + res.number + "."
-            : fio + " записан(а) на " + res.title + ". Номер в списке: " + res.number + ".", "ok");
-          renderFields({});
+          showDone(values, res);
         } else if (res.exists) {
           askEdit(res, function () { send(values, true); });
         } else {
@@ -392,8 +481,7 @@
         showMessage("Нет связи с сервером. Попробуйте ещё раз.", "err");
       })
       .finally(function () {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Зарегистрироваться";
+        setLoading(false);
       });
   }
 
