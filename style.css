@@ -87,22 +87,37 @@ a { color: var(--brand-text); }
   padding: calc(28px + env(safe-area-inset-top)) 20px 110px;
   color: #fff;
   text-align: center;
-  background:
-    radial-gradient(520px 260px at 50% 0%, rgba(80, 140, 255, .55), transparent 70%),
-    radial-gradient(700px 300px at 100% 100%, rgba(247, 147, 30, .28), transparent 70%),
-    linear-gradient(170deg, var(--hero-2), var(--hero));
+  background: linear-gradient(165deg, var(--hero-2) 0%, #0b33a8 45%, var(--hero) 100%);
   border-bottom: 4px solid var(--accent);
 }
-/* Оранжевые дуги «как у бегуна» на эмблеме — внизу шапки, за карточкой */
-.hero::before {
-  content: "";
+/* Фоновая графика шапки: беговая дорожка, оранжевые дуги как на эмблеме, линии скорости */
+.hero-art {
   position: absolute;
-  left: 0;
-  right: 0;
   bottom: 0;
-  height: 150px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 150' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%23f7931e' stroke-linecap='round'%3E%3Cpath d='M-20 140 C 300 30, 900 20, 1220 110' stroke-width='3' opacity='.6' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M-20 150 C 320 60, 880 50, 1220 140' stroke-width='1.5' opacity='.35' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  left: 50%;
   pointer-events: none;
+}
+/* Без масштабирования: линии всегда стоят на одном месте относительно этапов и карточки */
+.hero-art-wide { width: 2000px; height: 720px; margin-left: -1000px; }
+.hero-art-narrow { display: none; width: 600px; height: 560px; margin-left: -300px; }
+.hero h1, .hero-sub { text-shadow: 0 2px 12px rgba(4, 20, 80, .45); }
+
+.streaks { animation: streak-drift 7s ease-in-out infinite alternate; }
+.streaks-right { animation-delay: -3.5s; }
+@keyframes streak-drift {
+  from { translate: -14px 0; opacity: .8; }
+  to { translate: 14px 0; opacity: 1; }
+}
+/* Блик, пробегающий по оранжевой дуге */
+.glint {
+  stroke-dasharray: 90 1000;
+  stroke-dashoffset: 90;
+  opacity: .7;
+  animation: glint 6s ease-in-out 1s infinite;
+}
+@keyframes glint {
+  0% { stroke-dashoffset: 90; }
+  45%, 100% { stroke-dashoffset: -1000; }
 }
 .hero-inner { position: relative; max-width: 640px; margin: 0 auto; }
 
@@ -535,7 +550,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
   .hero { padding: calc(20px + env(safe-area-inset-top)) 16px 92px; }
   .hero h1 { margin-top: 12px; }
   .emblem { width: 96px; height: 96px; }
-  .hero::before { height: 100px; }
+  .hero-art-wide { display: none; }
+  .hero-art-narrow { display: block; }
   .club { width: 52px; height: 52px; top: calc(12px + env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
   .hero-sub { font-size: .9rem; }
   .progress { margin-top: 22px; gap: 6px; }
