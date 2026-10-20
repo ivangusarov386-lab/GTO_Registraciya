@@ -229,15 +229,12 @@
     }
     hideMessage();
 
+    // Информационное окно показывается всегда; если на листе есть столбец «Правила», в нём отмечается согласие.
     var rulesField = current.fields.filter(function (f) { return f.kind === "rules"; })[0];
-    if (rulesField) {
-      openRules(function () {
-        values[rulesField.label] = true;
-        send(values);
-      });
-    } else {
+    openRules(function () {
+      if (rulesField) values[rulesField.label] = true;
       send(values);
-    }
+    });
   });
 
   /* ---------- Окно с правилами ---------- */
@@ -248,19 +245,42 @@
     onAccept = callback;
     rulesText.innerHTML = "";
     var list = null;
-    (rules.length ? rules : ["Текст правил скоро появится."]).forEach(function (line) {
-      // Строки, начинающиеся с «-» или «•», показываем списком.
-      var item = /^[-•–]\s*(.+)$/s.exec(line);
+    var lines = rules.length ? rules : window.GTO_RULES || [];
+    lines.forEach(function (line) {
+      line = String(line).trim();
+      if (!line) return;
+      var item = /^[-•–*]\s*([\s\S]+)$/.exec(line);
       if (item) {
         if (!list) list = rulesText.appendChild(el("ul"));
-        list.appendChild(el("li", { text: item[1] }));
+        list.appendChild(linkify(el("li"), item[1]));
+        return;
+      }
+      list = null;
+      var step = /^(\d+)[.)]\s*([\s\S]+)$/.exec(line);
+      if (step) {
+        rulesText.appendChild(el("h3", {}, [
+          el("span", { class: "step", text: step[1] }),
+          linkify(el("span"), step[2]),
+        ]));
       } else {
-        list = null;
-        rulesText.appendChild(el("p", { text: line }));
+        rulesText.appendChild(linkify(el("p"), line));
       }
     });
     rulesText.scrollTop = 0;
     rulesDialog.showModal();
+  }
+
+  // Добавляет в node текст, превращая адреса сайтов в ссылки.
+  function linkify(node, text) {
+    var re = /https?:\/\/[^\s]+[^\s.,:;!?)]/g;
+    var last = 0, m;
+    while ((m = re.exec(text))) {
+      node.appendChild(document.createTextNode(text.slice(last, m.index)));
+      node.appendChild(el("a", { href: m[0], target: "_blank", rel: "noopener", text: m[0] }));
+      last = m.index + m[0].length;
+    }
+    node.appendChild(document.createTextNode(text.slice(last)));
+    return node;
   }
 
   document.getElementById("rules-accept").addEventListener("click", function () {
