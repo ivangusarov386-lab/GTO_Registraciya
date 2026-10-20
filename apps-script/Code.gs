@@ -191,7 +191,7 @@ function validate_(fields, raw) {
   var out = {};
   fields.forEach(function (f) {
     if (f.kind === 'rules') {
-      if (raw[f.label] !== true) throw new Error('Нужно ознакомиться с правилами.');
+      if (raw[f.label] !== true) throw new Error('Подтвердите регистрацию на сайте ГТО.');
       out[f.label] = f.checkbox ? true : RULES_ACCEPTED;
       return;
     }

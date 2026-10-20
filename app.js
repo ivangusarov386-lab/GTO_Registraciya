@@ -212,7 +212,7 @@
       var v = values[f.label];
       var problem = null;
       if (!v) problem = "заполните «" + caption(f.label) + "»";
-      else if (f.kind === "uin" && !UIN_RE.test(v)) problem = "УИН в формате 00-00-0000000";
+      else if (f.kind === "uin" && !UIN_RE.test(v)) problem = "укажите УИН в формате 00-00-0000000";
       else if (f.kind === "fio" && v.split(" ").length < 2) problem = "укажите фамилию и имя";
       if (problem) {
         errors.push(problem);
@@ -379,7 +379,7 @@
         if (res.ok) {
           var fio = values[(current.fields.filter(function (f) { return f.kind === "fio"; })[0] || {}).label] || "Участник";
           showMessage(res.updated
-            ? "Данные участника " + fio + " на " + res.title + " обновлены. Номер в списке: " + res.number + "."
+            ? "Данные обновлены: " + fio + ", " + res.title + ". Номер в списке: " + res.number + "."
             : fio + " записан(а) на " + res.title + ". Номер в списке: " + res.number + ".", "ok");
           renderFields({});
         } else if (res.exists) {
