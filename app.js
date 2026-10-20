@@ -48,7 +48,10 @@
   }
 
   document.addEventListener("close", function () {
-    if (!document.querySelector("dialog[open]")) document.documentElement.classList.remove("modal-open");
+    if (document.querySelector("dialog[open]")) return;
+    document.documentElement.classList.remove("modal-open");
+    // Свежие данные пришли, пока было открыто окно, — применяем после закрытия.
+    if (pendingData) setTimeout(function () { var d = pendingData; pendingData = null; applyData(d); }, 0);
   }, true);
 
   // Отмечает текущий этап в шапке: 1 — дата, 2 — анкета, 3 — готово.
@@ -96,7 +99,7 @@
 
   /* ---------- Даты ---------- */
 
-  function renderDates() {
+  function renderDates(autoSelect) {
     datesBox.innerHTML = "";
     if (!sheets.length) {
       datesBox.appendChild(el("p", { class: "empty", text: "Сейчас нет открытых дат для записи." }));
@@ -119,7 +122,7 @@
       ]);
       datesBox.appendChild(el("label", {}, [input, card]));
     });
-    if (sheets.length === 1) {
+    if (autoSelect !== false && sheets.length === 1) {
       datesBox.querySelector("input").checked = true;
       chooseSheet(0);
     }
@@ -287,12 +290,68 @@
 
   /* ---------- Загрузка и отправка ---------- */
 
+  /* ---------- Загрузка дат: мгновенно из памяти браузера, затем обновление ---------- */
+
+  var CACHE_KEY = "gto-form-v1";
+  var CACHE_DAYS = 14;
+  var shownJson = null;   // данные, которые сейчас показаны на странице
+  var pendingData = null; // свежие данные, ждущие закрытия окна
+
+  function readCache() {
+    try {
+      var c = JSON.parse(localStorage.getItem(CACHE_KEY));
+      if (c && c.data && Date.now() - c.t < CACHE_DAYS * 864e5) return c.data;
+    } catch (e) { /* память браузера недоступна */ }
+    return null;
+  }
+
+  function writeCache(data) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data: data })); } catch (e) { /* нет места или запрещено */ }
+  }
+
+  // Показывает данные. Если дата уже выбрана — сохраняет выбор и введённые значения.
+  function applyData(data) {
+    var json = JSON.stringify(data);
+    if (json === shownJson) return;
+    if (document.querySelector("dialog[open]")) { pendingData = data; return; }
+    shownJson = json;
+    rules = data.rules || [];
+
+    if (!current) {
+      sheets = data.sheets || [];
+      renderDates();
+      return;
+    }
+    var values = collect();
+    var name = current.sheet;
+    sheets = data.sheets || [];
+    renderDates(false);
+    var idx = -1;
+    sheets.forEach(function (s, i) { if (s.sheet === name) idx = i; });
+    if (idx === -1) {
+      current = null;
+      detailsBox.hidden = true;
+      submitBtn.hidden = true;
+      setEditMode(null);
+      setStep(1);
+      showMessage("Список дат обновился — выберите дату ещё раз.", "info");
+      return;
+    }
+    datesBox.querySelectorAll("input")[idx].checked = true;
+    current = sheets[idx];
+    if (editUin) setEditMode(editUin);
+    if (!form.hidden) renderFields(values);
+  }
+
   function load() {
     if (!SCRIPT_URL) {
       datesBox.innerHTML = "";
       showMessage("Не указан адрес Google Apps Script в config.js.", "err");
       return;
     }
+    var cached = readCache();
+    if (cached) applyData(cached);
+
     // Google Apps Script после простоя отвечает несколько секунд; если ответа нет 30 с — сообщаем об ошибке.
     var controller = window.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (controller) controller.abort(); }, 30000);
@@ -300,16 +359,17 @@
       .then(function (r) { clearTimeout(timer); return r.json(); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.error);
-        sheets = res.sheets || [];
-        rules = res.rules || [];
-        renderDates();
+        writeCache(res);
+        applyData(res);
       })
       .catch(function () {
         clearTimeout(timer);
+        if (cached) return; // даты уже показаны из памяти браузера
         datesBox.innerHTML = "";
         showMessage("Не удалось загрузить даты сдачи. Проверьте интернет и обновите страницу.", "err");
       });
   }
+
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();

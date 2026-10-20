@@ -22,13 +22,44 @@ var DATE_PREFIX_RE = /^(\d{2})\.(\d{2})\.(\d{2})\b\s*(.*)$/;
 var UIN_RE = /^\d{2}-\d{2}-\d{7}$/;
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+var CACHE_KEY = 'form-v1';
+var CACHE_SECONDS = 300;
+
 // GET — описание всех доступных дат сдачи и полей формы для каждой.
+// Ответ кэшируется на 5 минут: повторные открытия сайта не читают таблицу заново.
 function doGet(e) {
   try {
-    return json_({ ok: true, sheets: listDateSheets_().map(describeSheet_), rules: readRules_() });
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(CACHE_KEY);
+    if (cached) return text_(cached);
+    var body = JSON.stringify({ ok: true, sheets: listDateSheets_().map(describeSheet_), rules: readRules_() });
+    try { cache.put(CACHE_KEY, body, CACHE_SECONDS); } catch (err) { /* слишком большой ответ — без кэша */ }
+    return text_(body);
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
   }
+}
+
+// Любая ручная правка таблицы сбрасывает кэш, чтобы сайт сразу увидел изменения.
+function onEdit() {
+  clearCache_();
+}
+
+// Меню в таблице: после переименования листов или смены раскрывающихся списков
+// (эти действия не вызывают onEdit) можно обновить сайт сразу, не дожидаясь 5 минут.
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('ГТО')
+    .addItem('Обновить данные на сайте', 'refreshSite')
+    .addToUi();
+}
+
+function refreshSite() {
+  clearCache_();
+  SpreadsheetApp.getActiveSpreadsheet().toast('Сайт покажет актуальные даты и списки при следующем открытии.', 'ГТО', 5);
+}
+
+function clearCache_() {
+  CacheService.getScriptCache().remove(CACHE_KEY);
 }
 
 // POST (тело — JSON { sheet, values: { <заголовок>: <значение> }, update, originalUin }) — регистрация.
@@ -87,13 +118,15 @@ function listDateSheets_() {
 function describeSheet_(sheet) {
   var info = parseSheetName_(sheet.getName());
   var headers = getHeaders_(sheet);
+  // Проверки данных всех столбцов 2-й строки — одним запросом.
+  var rules = headers.length ? sheet.getRange(2, 1, 1, headers.length).getDataValidations()[0] : [];
   var fields = [];
   headers.forEach(function (label, i) {
     if (!label || isNumberColumn_(label)) return;
-    var field = { label: label, kind: kindOf_(label), options: readOptions_(sheet, i + 1) };
+    var field = { label: label, kind: kindOf_(label), options: optionsFromRule_(rules[i]) };
     if (field.kind === 'rules') {
       field.options = null;
-      field.checkbox = isCheckbox_(sheet, i + 1);
+      field.checkbox = !!rules[i] && rules[i].getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
     }
     if (!field.options && field.kind === 'grade') field.options = gradesFromLabel_(info.label);
     fields.push(field);
@@ -116,10 +149,6 @@ function readRules_() {
     .filter(function (v) { return v; });
 }
 
-function isCheckbox_(sheet, col) {
-  var rule = sheet.getRange(2, col).getDataValidation();
-  return !!rule && rule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
-}
 
 // «23.11.26 (3-4 классы)» → { date: '23.11.26', label: '3-4 классы', time }
 function parseSheetName_(name) {
@@ -147,9 +176,8 @@ function getHeaders_(sheet) {
     .map(function (h) { return String(h).trim(); });
 }
 
-// Варианты из раскрывающегося списка столбца (проверка данных во 2-й строке).
-function readOptions_(sheet, col) {
-  var rule = sheet.getRange(2, col).getDataValidation();
+// Варианты из раскрывающегося списка столбца (правило проверки данных во 2-й строке).
+function optionsFromRule_(rule) {
   if (!rule) return null;
   var type = rule.getCriteriaType();
   var args = rule.getCriteriaValues();
@@ -294,6 +322,10 @@ function findRow_(sheet, header, value) {
   var cells = sheet.getRange(2, col + 1, last - 1, 1).getDisplayValues();
   for (var i = 0; i < cells.length; i++) if (cells[i][0].trim() === value) return i + 2;
   return 0;
+}
+
+function text_(body) {
+  return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
 }
 
 function json_(obj) {
