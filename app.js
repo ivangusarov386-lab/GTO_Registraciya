@@ -60,7 +60,7 @@
       var input = el("input", { type: "radio", name: "sheet", value: String(i) });
       input.addEventListener("change", function () { selectSheet(i); });
       var card = el("span", { class: "date" }, [el("b", { text: s.date })]);
-      if (s.label) card.appendChild(el("small", { text: s.label }));
+      if (s.label) card.appendChild(el("span", { class: "label", text: s.label }));
       datesBox.appendChild(el("label", {}, [input, card]));
     });
     if (sheets.length === 1) {
@@ -277,7 +277,44 @@
 
   rulesDialog.addEventListener("cancel", function () { onAccept = null; });
 
-  function send(values) {
+  /* ---------- Окно «Хотите отредактировать данные?» ---------- */
+
+  var confirmDialog = document.getElementById("confirm");
+  var confirmText = document.getElementById("confirm-text");
+  var onConfirm = null;
+
+  function askEdit(res, callback) {
+    onConfirm = callback;
+    confirmText.innerHTML = "";
+    confirmText.appendChild(el("p", { text: "Участник с таким УИН уже записан на " + res.title + ". Сейчас в списке:" }));
+    var list = el("ul", { class: "current" });
+    Object.keys(res.current || {}).forEach(function (k) {
+      list.appendChild(el("li", {}, [el("span", { text: caption(k) + ": " }), document.createTextNode(res.current[k])]));
+    });
+    confirmText.appendChild(list);
+    confirmText.appendChild(el("p", { text: "Хотите отредактировать данные? Они будут заменены на введённые в форме." }));
+    confirmDialog.showModal();
+  }
+
+  document.getElementById("confirm-yes").addEventListener("click", function () {
+    confirmDialog.close();
+    var cb = onConfirm;
+    onConfirm = null;
+    if (cb) cb();
+  });
+
+  document.getElementById("confirm-no").addEventListener("click", function () {
+    confirmDialog.close();
+  });
+
+  confirmDialog.addEventListener("close", function () {
+    if (onConfirm) {
+      onConfirm = null;
+      showMessage("Данные не изменены.", "err");
+    }
+  });
+
+  function send(values, update) {
     submitBtn.disabled = true;
     submitBtn.textContent = "Отправка…";
 
@@ -285,14 +322,18 @@
     fetch(SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ sheet: current.sheet, values: values }),
+      body: JSON.stringify({ sheet: current.sheet, values: values, update: !!update }),
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (res.ok) {
-          var fio = values[(current.fields.filter(function (f) { return f.kind === "fio"; })[0] || {}).label];
-          showMessage((fio || "Участник") + " записан(а) на " + res.title + ". Номер в списке: " + res.number + ".", "ok");
+          var fio = values[(current.fields.filter(function (f) { return f.kind === "fio"; })[0] || {}).label] || "Участник";
+          showMessage(res.updated
+            ? "Данные участника " + fio + " на " + res.title + " обновлены. Номер в списке: " + res.number + "."
+            : fio + " записан(а) на " + res.title + ". Номер в списке: " + res.number + ".", "ok");
           renderFields({});
+        } else if (res.exists) {
+          askEdit(res, function () { send(values, true); });
         } else {
           showMessage(res.error || "Ошибка регистрации.", "err");
         }

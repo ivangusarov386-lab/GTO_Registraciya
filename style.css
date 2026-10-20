@@ -7,6 +7,7 @@
   --border: #d5dce5;
   --accent: #d32f2f;
   --accent-dark: #b71c1c;
+  --accent-text: #c62828;
   --ok-bg: #e7f6ec;
   --ok-text: #1b6b36;
   --err-bg: #fdecec;
@@ -16,6 +17,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --backdrop: rgba(0, 0, 0, .65);
+    --accent-text: #ff6b6b;
     --bg: #12161c;
     --card: #1c222b;
     --text: #e6eaf0;
@@ -126,17 +128,17 @@ button:disabled { opacity: .6; cursor: wait; }
 .dates input { position: absolute; opacity: 0; pointer-events: none; }
 .dates .date {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  column-gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
 }
-.dates .date b { font-size: 1.05rem; }
-.dates .date small { color: var(--muted); }
+.dates .date b { font-size: 1.15rem; }
+.dates .date .label { font-size: 1.15rem; font-weight: 700; color: var(--accent-text); }
 .dates input:checked + .date { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.dates input:checked + .date small { color: var(--text); }
 .dates input:focus-visible + .date { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .rules {
@@ -168,3 +170,7 @@ button.secondary {
   font-weight: 500;
 }
 button.secondary:hover { background: var(--bg); }
+
+.rules-text .current { margin: 0 0 12px; padding: 0; list-style: none; }
+.current li { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.current li span { color: var(--muted); }

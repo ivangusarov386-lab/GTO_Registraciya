@@ -11,10 +11,11 @@
  *   - столбец «Правила» — отметка об ознакомлении: на сайте перед записью
  *     показывается окно с правилами (текст — на листе «Правила», столбец A);
  *     если в столбце стоят флажки, ставится галочка, иначе пишется «Ознакомлен».
- * «Основной» — общий список всех участников (без повторов по УИН).
+ * Если участник с таким УИН уже записан на эту дату, сайт спрашивает, хотите ли
+ * отредактировать данные, и при согласии перезаписывает его строку (№ сохраняется).
+ * Остальные листы («Основной» — шаблон, «Правила») скрипт не изменяет.
  */
 
-var MAIN_SHEET = 'Основной';
 var RULES_SHEET = 'Правила';
 var RULES_ACCEPTED = 'Ознакомлен';
 var DATE_PREFIX_RE = /^(\d{2})\.(\d{2})\.(\d{2})\b\s*(.*)$/;
@@ -29,7 +30,8 @@ function doGet(e) {
   }
 }
 
-// POST (тело — JSON { sheet, values: { <заголовок>: <значение> } }) — регистрация.
+// POST (тело — JSON { sheet, values: { <заголовок>: <значение> }, update }) — регистрация.
+// Если УИН уже записан на эту дату и update не true, возвращает { exists: true, current }.
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
@@ -46,18 +48,14 @@ function doPost(e) {
     var values = validate_(form.fields, data.values || {});
 
     var uinField = findField_(form.fields, 'uin');
-    if (uinField && hasValue_(sheet, uinField.label, values[uinField.label])) {
-      return json_({ ok: false, error: 'Участник с таким УИН уже записан на ' + form.date + '.' });
+    var existing = uinField ? findRow_(sheet, uinField.label, values[uinField.label]) : 0;
+
+    if (existing && data.update !== true) {
+      return json_({ ok: false, exists: true, title: form.title, current: readRecord_(sheet, existing) });
     }
 
-    var number = appendRecord_(sheet, values);
-
-    var main = ss.getSheetByName(MAIN_SHEET);
-    if (main && !(uinField && hasValue_(main, uinField.label, values[uinField.label]))) {
-      appendRecord_(main, values);
-    }
-
-    return json_({ ok: true, number: number, date: form.date, title: form.title });
+    var number = writeRecord_(sheet, existing || nextRow_(sheet), values);
+    return json_({ ok: true, updated: !!existing, number: number, date: form.date, title: form.title });
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
   } finally {
@@ -209,22 +207,54 @@ function validate_(fields, raw) {
   return out;
 }
 
-// Добавляет строку, раскладывая значения по столбцам с такими же заголовками.
-function appendRecord_(sheet, values) {
+// Записывает значения в строку row по столбцам с такими же заголовками.
+// № новой строки — порядковый, у существующей не меняется.
+function writeRecord_(sheet, row, values) {
   var headers = getHeaders_(sheet);
-  var row = sheet.getLastRow() + 1;
-  var number = row - 1; // строка 1 — заголовок
+  var range = sheet.getRange(row, 1, 1, headers.length);
+  var old = range.getValues()[0];
   var keys = Object.keys(values);
-  var record = headers.map(function (h) {
-    if (isNumberColumn_(h)) return number;
+  var number = row - 1; // строка 1 — заголовок
+  var record = headers.map(function (h, i) {
+    if (isNumberColumn_(h)) {
+      if (old[i] !== '' && old[i] != null) number = old[i];
+      return number;
+    }
     var key = matchKey_(keys, h);
-    return key ? toCell_(h, values[key]) : '';
+    return key ? toCell_(h, values[key]) : old[i];
   });
   headers.forEach(function (h, i) {
     if (kindOf_(h) === 'uin') sheet.getRange(row, i + 1).setNumberFormat('@');
   });
-  sheet.getRange(row, 1, 1, headers.length).setValues([record]);
+  range.setValues([record]);
   return number;
+}
+
+// Первая строка после последней заполненной. Столбцы «№» и «Правила» не учитываются:
+// в шаблоне они могут быть заранее заполнены номерами или пустыми флажками.
+function nextRow_(sheet) {
+  var headers = getHeaders_(sheet);
+  var last = sheet.getLastRow();
+  if (last < 2) return 2;
+  var rows = sheet.getRange(2, 1, last - 1, headers.length).getDisplayValues();
+  for (var r = rows.length - 1; r >= 0; r--) {
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c];
+      if (!h || isNumberColumn_(h) || kindOf_(h) === 'rules') continue;
+      if (String(rows[r][c]).trim()) return r + 3;
+    }
+  }
+  return 2;
+}
+
+function readRecord_(sheet, row) {
+  var headers = getHeaders_(sheet);
+  var values = sheet.getRange(row, 1, 1, headers.length).getDisplayValues()[0];
+  var out = {};
+  headers.forEach(function (h, i) {
+    if (h && !isNumberColumn_(h) && kindOf_(h) !== 'rules') out[h] = values[i];
+  });
+  return out;
 }
 
 function matchKey_(keys, header) {
@@ -240,12 +270,14 @@ function toCell_(header, v) {
   return v;
 }
 
-function hasValue_(sheet, header, value) {
+// Номер строки, где в столбце header стоит value, или 0.
+function findRow_(sheet, header, value) {
   var col = getHeaders_(sheet).map(function (h) { return h.toLowerCase(); }).indexOf(header.toLowerCase());
   var last = sheet.getLastRow();
-  if (col === -1 || last < 2) return false;
-  return sheet.getRange(2, col + 1, last - 1, 1).getDisplayValues()
-    .some(function (r) { return r[0].trim() === value; });
+  if (col === -1 || last < 2) return 0;
+  var cells = sheet.getRange(2, col + 1, last - 1, 1).getDisplayValues();
+  for (var i = 0; i < cells.length; i++) if (cells[i][0].trim() === value) return i + 2;
+  return 0;
 }
 
 function json_(obj) {
