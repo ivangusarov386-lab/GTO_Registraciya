@@ -284,12 +284,13 @@
         return;
       }
       list = null;
+      // «1. …» — шаг с номером, «! …» — предупреждение с восклицательным знаком вместо номера.
       var step = /^(\d+)[.)]\s*([\s\S]+)$/.exec(line);
-      if (step) {
-        var warn = step[2].indexOf("!!!") !== -1;
+      var warn = /^!+\s*([\s\S]+)$/.exec(line);
+      if (step || warn) {
         rulesText.appendChild(el("h3", warn ? { class: "warn" } : {}, [
-          el("span", { class: "step", text: step[1] }),
-          linkify(el("span"), warn ? step[2].replace(/!!!/g, "!") : step[2]),
+          el("span", { class: "step", text: warn ? "!" : step[1] }),
+          linkify(el("span"), warn ? warn[1] : step[2]),
         ]));
       } else {
         rulesText.appendChild(linkify(el("p"), line));
