@@ -8,17 +8,22 @@
  *   - поля формы — заголовки первой строки листа (кроме «№»);
  *   - если в столбце есть раскрывающийся список, на сайте будет выбор из него;
  *   - если у столбца «класс» списка нет, классы берутся из названия листа («3-4 классы»).
+ *   - столбец «Правила» — отметка об ознакомлении: на сайте перед записью
+ *     показывается окно с правилами (текст — на листе «Правила», столбец A);
+ *     если в столбце стоят флажки, ставится галочка, иначе пишется «Ознакомлен».
  * «Основной» — общий список всех участников (без повторов по УИН).
  */
 
 var MAIN_SHEET = 'Основной';
+var RULES_SHEET = 'Правила';
+var RULES_ACCEPTED = 'Ознакомлен';
 var DATE_PREFIX_RE = /^(\d{2})\.(\d{2})\.(\d{2})\b\s*(.*)$/;
 var UIN_RE = /^\d{2}-\d{2}-\d{7}$/;
 
 // GET — описание всех доступных дат сдачи и полей формы для каждой.
 function doGet(e) {
   try {
-    return json_({ ok: true, sheets: listDateSheets_().map(describeSheet_) });
+    return json_({ ok: true, sheets: listDateSheets_().map(describeSheet_), rules: readRules_() });
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
   }
@@ -77,6 +82,10 @@ function describeSheet_(sheet) {
   headers.forEach(function (label, i) {
     if (!label || isNumberColumn_(label)) return;
     var field = { label: label, kind: kindOf_(label), options: readOptions_(sheet, i + 1) };
+    if (field.kind === 'rules') {
+      field.options = null;
+      field.checkbox = isCheckbox_(sheet, i + 1);
+    }
     if (!field.options && field.kind === 'grade') field.options = gradesFromLabel_(info.label);
     fields.push(field);
   });
@@ -87,6 +96,20 @@ function describeSheet_(sheet) {
     title: info.label ? info.date + ' — ' + info.label : info.date,
     fields: fields,
   };
+}
+
+// Текст правил: каждая непустая ячейка столбца A листа «Правила» — отдельный абзац.
+function readRules_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RULES_SHEET);
+  if (!sheet || sheet.getLastRow() === 0) return [];
+  return sheet.getRange(1, 1, sheet.getLastRow(), 1).getDisplayValues()
+    .map(function (r) { return String(r[0]).trim(); })
+    .filter(function (v) { return v; });
+}
+
+function isCheckbox_(sheet, col) {
+  var rule = sheet.getRange(2, col).getDataValidation();
+  return !!rule && rule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
 }
 
 // «23.11.26 (3-4 классы)» → { date: '23.11.26', label: '3-4 классы', time }
@@ -151,6 +174,7 @@ function kindOf_(label) {
   if (l === 'пол') return 'gender';
   if (l.indexOf('класс') !== -1) return 'grade';
   if (l.indexOf('букв') !== -1) return 'letter';
+  if (l.indexOf('правил') !== -1) return 'rules';
   return 'text';
 }
 
@@ -168,6 +192,11 @@ function findField_(fields, kind) {
 function validate_(fields, raw) {
   var out = {};
   fields.forEach(function (f) {
+    if (f.kind === 'rules') {
+      if (raw[f.label] !== true) throw new Error('Нужно ознакомиться с правилами.');
+      out[f.label] = f.checkbox ? true : RULES_ACCEPTED;
+      return;
+    }
     var v = String(raw[f.label] == null ? '' : raw[f.label]).replace(/\s+/g, ' ').trim();
     if (!v) throw new Error('Заполните поле «' + f.label + '».');
     if (f.options && f.options.indexOf(v) === -1) {
@@ -206,6 +235,7 @@ function matchKey_(keys, header) {
 
 // Числа пишем числами (как в выпадающих списках), УИН и прочее — текстом.
 function toCell_(header, v) {
+  if (typeof v !== 'string') return v;
   if (kindOf_(header) !== 'uin' && /^\d+$/.test(v)) return Number(v);
   return v;
 }

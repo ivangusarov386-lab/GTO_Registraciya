@@ -10,7 +10,11 @@
   var submitBtn = document.getElementById("submit");
   var message = document.getElementById("message");
 
+  var rulesDialog = document.getElementById("rules");
+  var rulesText = document.getElementById("rules-text");
+
   var sheets = [];   // описание листов-дат, приходит из Apps Script
+  var rules = [];    // абзацы текста правил с листа «Правила»
   var current = null; // выбранный лист
 
   var GENDER_NAMES = { "м": "Муж.", "ж": "Жен." };
@@ -79,6 +83,7 @@
   function renderFields(prev) {
     fieldsBox.innerHTML = "";
     current.fields.forEach(function (f, i) {
+      if (f.kind === "rules") return; // отмечается в окне с правилами
       var id = "f" + i;
       var control;
 
@@ -163,6 +168,7 @@
     var values = {};
     var fd = new FormData(form);
     current.fields.forEach(function (f) {
+      if (f.kind === "rules") return;
       values[f.label] = String(fd.get(f.label) || "").replace(/\s+/g, " ").trim();
     });
     return values;
@@ -172,6 +178,7 @@
     var errors = [];
     fieldsBox.querySelectorAll(".invalid").forEach(function (n) { n.classList.remove("invalid"); });
     current.fields.forEach(function (f, i) {
+      if (f.kind === "rules") return;
       var v = values[f.label];
       var problem = null;
       if (!v) problem = "заполните «" + caption(f.label) + "»";
@@ -199,6 +206,7 @@
       .then(function (res) {
         if (!res.ok) throw new Error(res.error);
         sheets = res.sheets || [];
+        rules = res.rules || [];
         renderDates();
       })
       .catch(function () {
@@ -219,7 +227,57 @@
       showMessage("Проверьте форму: " + errors.join(", ") + ".", "err");
       return;
     }
+    hideMessage();
 
+    var rulesField = current.fields.filter(function (f) { return f.kind === "rules"; })[0];
+    if (rulesField) {
+      openRules(function () {
+        values[rulesField.label] = true;
+        send(values);
+      });
+    } else {
+      send(values);
+    }
+  });
+
+  /* ---------- Окно с правилами ---------- */
+
+  var onAccept = null;
+
+  function openRules(callback) {
+    onAccept = callback;
+    rulesText.innerHTML = "";
+    var list = null;
+    (rules.length ? rules : ["Текст правил скоро появится."]).forEach(function (line) {
+      // Строки, начинающиеся с «-» или «•», показываем списком.
+      var item = /^[-•–]\s*(.+)$/s.exec(line);
+      if (item) {
+        if (!list) list = rulesText.appendChild(el("ul"));
+        list.appendChild(el("li", { text: item[1] }));
+      } else {
+        list = null;
+        rulesText.appendChild(el("p", { text: line }));
+      }
+    });
+    rulesText.scrollTop = 0;
+    rulesDialog.showModal();
+  }
+
+  document.getElementById("rules-accept").addEventListener("click", function () {
+    rulesDialog.close();
+    var cb = onAccept;
+    onAccept = null;
+    if (cb) cb();
+  });
+
+  document.getElementById("rules-cancel").addEventListener("click", function () {
+    onAccept = null;
+    rulesDialog.close();
+  });
+
+  rulesDialog.addEventListener("cancel", function () { onAccept = null; });
+
+  function send(values) {
     submitBtn.disabled = true;
     submitBtn.textContent = "Отправка…";
 
@@ -246,7 +304,7 @@
         submitBtn.disabled = false;
         submitBtn.textContent = "Зарегистрироваться";
       });
-  });
+  }
 
   load();
 })();

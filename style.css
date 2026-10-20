@@ -1,4 +1,5 @@
 :root {
+  --backdrop: rgba(20, 28, 40, .55);
   --bg: #eef2f7;
   --card: #ffffff;
   --text: #1c2430;
@@ -14,6 +15,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --backdrop: rgba(0, 0, 0, .65);
     --bg: #12161c;
     --card: #1c222b;
     --text: #e6eaf0;
@@ -83,7 +85,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .invalid { border-color: var(--err-text); }
 
 .toggle { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 6px; }
-.toggle label { display: block; }
+.toggle label { display: block; position: relative; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle span {
   display: block;
@@ -120,7 +122,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .hint { margin-top: -2px; }
 
 .dates { display: grid; gap: 8px; }
-.dates label { display: block; }
+.dates label { display: block; position: relative; }
 .dates input { position: absolute; opacity: 0; pointer-events: none; }
 .dates .date {
   display: flex;
@@ -136,3 +138,33 @@ button:disabled { opacity: .6; cursor: wait; }
 .dates input:checked + .date { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .dates input:checked + .date small { color: var(--text); }
 .dates input:focus-visible + .date { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.rules {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--text);
+  flex-direction: column;
+}
+.rules[open] { display: flex; }
+.rules::backdrop { background: var(--backdrop); }
+.rules h2 { margin: 0; padding: 20px 24px 12px; font-size: 1.2rem; }
+.rules-text { padding: 0 24px; overflow-y: auto; }
+.rules-text p { margin: 0 0 12px; white-space: pre-line; }
+.rules-text ul { margin: 0 0 12px; padding-left: 20px; }
+.rules-actions {
+  display: grid;
+  gap: 8px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border);
+}
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+button.secondary:hover { background: var(--bg); }
