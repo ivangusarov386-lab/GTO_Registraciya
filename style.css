@@ -404,6 +404,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 .message { margin: 0; padding: 12px 16px; border-radius: 12px; font-weight: 500; }
 .message.ok { background: var(--ok-soft); color: var(--ok); }
 .message.err { background: var(--err-bg); color: var(--err-text); }
+.message.info { background: var(--brand-soft); color: var(--brand-text); }
+.dates.is-locked { opacity: .6; }
+.dates.is-locked .date { cursor: not-allowed; }
 
 /* ---------- Успех ---------- */
 
@@ -435,6 +438,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 }
 .done-details dt { color: var(--muted); }
 .done-details dd { margin: 0; font-weight: 700; overflow-wrap: break-word; }
+.done-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; width: 100%; }
+.done-actions .btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 
 /* ---------- Подвал ---------- */
 
@@ -566,6 +571,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
   form { gap: 24px; }
   .fields { grid-template-columns: 1fr; }
   .done-details { grid-template-columns: 1fr; gap: 2px; }
+  .done-actions { grid-template-columns: 1fr; }
+  .done-actions #again { order: -1; }
   .done-details dt { font-size: .85rem; }
   .done-details dd + dt { margin-top: 10px; }
   .dates { grid-template-columns: 1fr; }

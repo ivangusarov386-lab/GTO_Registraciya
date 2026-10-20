@@ -20,6 +20,7 @@ var RULES_SHEET = 'Правила';
 var RULES_ACCEPTED = 'Ознакомлен';
 var DATE_PREFIX_RE = /^(\d{2})\.(\d{2})\.(\d{2})\b\s*(.*)$/;
 var UIN_RE = /^\d{2}-\d{2}-\d{7}$/;
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // GET — описание всех доступных дат сдачи и полей формы для каждой.
 function doGet(e) {
@@ -30,8 +31,10 @@ function doGet(e) {
   }
 }
 
-// POST (тело — JSON { sheet, values: { <заголовок>: <значение> }, update }) — регистрация.
+// POST (тело — JSON { sheet, values: { <заголовок>: <значение> }, update, originalUin }) — регистрация.
 // Если УИН уже записан на эту дату и update не true, возвращает { exists: true, current }.
+// originalUin — при исправлении заявки с сайта: строка ищется по прежнему УИН,
+// чтобы можно было исправить и сам УИН.
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
@@ -49,6 +52,14 @@ function doPost(e) {
 
     var uinField = findField_(form.fields, 'uin');
     var existing = uinField ? findRow_(sheet, uinField.label, values[uinField.label]) : 0;
+
+    if (uinField && data.update === true && data.originalUin && data.originalUin !== values[uinField.label]) {
+      var original = findRow_(sheet, uinField.label, String(data.originalUin));
+      if (existing && existing !== original) {
+        return json_({ ok: false, error: 'Участник с УИН ' + values[uinField.label] + ' уже записан на ' + form.date + '.' });
+      }
+      existing = original || existing;
+    }
 
     if (existing && data.update !== true) {
       return json_({ ok: false, exists: true, title: form.title, current: readRecord_(sheet, existing) });
@@ -166,6 +177,7 @@ function gradesFromLabel_(label) {
 
 function kindOf_(label) {
   var l = label.toLowerCase();
+  if (/e-?mail|почт/.test(l)) return 'email';
   if (l.indexOf('уин') !== -1) return 'uin';
   if (l.indexOf('фио') !== -1) return 'fio';
   if (l.indexOf('ступен') !== -1) return 'stage';
@@ -202,6 +214,10 @@ function validate_(fields, raw) {
     }
     if (f.kind === 'uin' && !UIN_RE.test(v)) throw new Error('УИН должен быть в формате 00-00-0000000.');
     if (f.kind === 'fio' && v.split(' ').length < 2) throw new Error('Укажите фамилию и имя.');
+    if (f.kind === 'email') {
+      v = v.replace(/\s/g, '').toLowerCase();
+      if (!EMAIL_RE.test(v)) throw new Error('Проверьте адрес электронной почты.');
+    }
     out[f.label] = v;
   });
   return out;

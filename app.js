@@ -3,6 +3,7 @@
 
   var SCRIPT_URL = (window.GTO_CONFIG && window.GTO_CONFIG.SCRIPT_URL) || "";
   var UIN_RE = /^\d{2}-\d{2}-\d{7}$/;
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
   var form = document.getElementById("form");
   var datesBox = document.getElementById("dates");
@@ -20,6 +21,8 @@
   var rules = [];    // абзацы текста правил с листа «Правила»
   var rulesAccepted = false;
   var current = null; // выбранный лист
+  var lastValues = null; // данные последней отправленной заявки — для «Редактировать»
+  var editUin = null;    // УИН записи, которую сейчас редактируют
 
   var GENDER_NAMES = { "м": "Мужской", "ж": "Женский" };
   var MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -27,6 +30,7 @@
   var WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
   var PLACEHOLDERS = {
     fio: "Иванов Иван Иванович",
+    email: "name@mail.ru",
     uin: "00-00-0000000",
     letter: "А",
   };
@@ -72,6 +76,7 @@
   }
 
   function caption(label) {
+    if (/e-?mail|почт/i.test(label)) return "Электронная почта";
     return label.charAt(0).toUpperCase() + label.slice(1);
   }
 
@@ -175,7 +180,7 @@
       var wrap = control.tagName === "FIELDSET"
         ? control
         : el("label", { for: id, class: "field" }, [el("span", { class: "field-label", text: caption(f.label) }), control]);
-      if (f.kind === "fio" || f.kind === "uin" || f.kind === "text") wrap.classList.add("field-wide");
+      if (f.kind === "fio" || f.kind === "uin" || f.kind === "email" || f.kind === "text") wrap.classList.add("field-wide");
       if (f.kind === "uin") {
         wrap.appendChild(el("small", { class: "hint", text: "11 цифр из личного кабинета на gto.ru" }));
       }
@@ -213,6 +218,13 @@
     var input = el("input", { id: id, name: f.label, required: "" });
     if (PLACEHOLDERS[f.kind]) input.placeholder = PLACEHOLDERS[f.kind];
     if (f.kind === "fio") input.autocomplete = "name";
+    if (f.kind === "email") {
+      input.type = "email";
+      input.inputMode = "email";
+      input.autocomplete = "email";
+      input.spellcheck = false;
+      input.setAttribute("autocapitalize", "off");
+    }
     if (f.kind === "uin") {
       input.inputMode = "numeric";
       input.maxLength = 13;
@@ -247,7 +259,8 @@
     var fd = new FormData(form);
     current.fields.forEach(function (f) {
       if (f.kind === "rules") return;
-      values[f.label] = String(fd.get(f.label) || "").replace(/\s+/g, " ").trim();
+      var v = String(fd.get(f.label) || "").replace(/\s+/g, " ").trim();
+      values[f.label] = f.kind === "email" ? v.replace(/\s/g, "").toLowerCase() : v;
     });
     return values;
   }
@@ -262,6 +275,7 @@
       if (!v) problem = "заполните «" + caption(f.label) + "»";
       else if (f.kind === "uin" && !UIN_RE.test(v)) problem = "укажите УИН в формате 00-00-0000000";
       else if (f.kind === "fio" && v.split(" ").length < 2) problem = "укажите фамилию и имя";
+      else if (f.kind === "email" && !EMAIL_RE.test(v)) problem = "проверьте адрес электронной почты";
       if (problem) {
         errors.push(problem);
         var node = document.getElementById("f" + i);
@@ -418,48 +432,78 @@
 
   /* ---------- Экран «Вы записаны» ---------- */
 
+  // Значение поля для показа: «м» → «Мужской», «4» → «4 класс» и т. п.
+  function displayValue(f, v) {
+    if (f.kind === "gender") return GENDER_NAMES[String(v).toLowerCase()] || v;
+    if (f.kind === "grade" && /^\d+$/.test(v)) return v + " класс";
+    if (f.kind === "stage" && /^\d+$/.test(v)) return v + " ступень";
+    return v;
+  }
+
   function showDone(values, res) {
-    var fioField = current.fields.filter(function (f) { return f.kind === "fio"; })[0];
-    var fio = fioField ? values[fioField.label] : "";
+    lastValues = values;
     document.getElementById("done-title").textContent = res.updated ? "Данные обновлены" : "Вы записаны!";
     document.getElementById("done-text").textContent = res.updated
-      ? "Изменения сохранены в списке участников."
-      : "Заявка принята. Ждём вас на сдаче нормативов.";
+      ? "Изменения сохранены. Проверьте данные ещё раз."
+      : "Заявка принята. Проверьте данные — если есть ошибка, нажмите «Редактировать».";
 
     var d = parseDate(res.date || current.date);
-    var rows = [
-      ["Участник", fio],
-      ["Дата", (d ? d.full + ", " + d.weekday : current.date)],
-      ["Группа", current.label],
-      ["Номер в списке", String(res.number)],
-    ];
+    var rows = [["Дата", d ? d.full + ", " + d.weekday : current.date]];
+    if (current.label) rows.push(["Группа", current.label]);
+    current.fields.forEach(function (f) {
+      if (f.kind === "rules" || !values[f.label]) return;
+      rows.push([caption(f.label), displayValue(f, values[f.label])]);
+    });
     var dl = document.getElementById("done-details");
     dl.innerHTML = "";
     rows.forEach(function (r) {
-      if (!r[1]) return;
       dl.appendChild(el("dt", { text: r[0] }));
       dl.appendChild(el("dd", { text: r[1] }));
     });
 
+    setEditMode(null);
     form.hidden = true;
     doneBox.hidden = false;
     setStep(3);
     doneBox.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  document.getElementById("again").addEventListener("click", function () {
+  // Режим исправления только что отправленной заявки: дата не меняется,
+  // строка в таблице ищется по прежнему УИН (на случай, если ошиблись в самом УИН).
+  function setEditMode(uin) {
+    editUin = uin;
+    datesBox.querySelectorAll("input").forEach(function (input) { input.disabled = !!uin; });
+    datesBox.classList.toggle("is-locked", !!uin);
+    submitBtn.querySelector(".btn-label").textContent = uin ? "Сохранить изменения" : "Зарегистрироваться";
+  }
+
+  function backToForm(values) {
     doneBox.hidden = true;
     form.hidden = false;
     hideMessage();
-    renderFields({});
+    renderFields(values || {});
     setStep(2);
     detailsBox.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  document.getElementById("edit").addEventListener("click", function () {
+    var uinField = current.fields.filter(function (f) { return f.kind === "uin"; })[0];
+    backToForm(lastValues);
+    setEditMode(uinField ? lastValues[uinField.label] : "-");
+    showMessage("Исправьте данные и нажмите «Сохранить изменения».", "info");
+  });
+
+  document.getElementById("again").addEventListener("click", function () {
+    setEditMode(null);
+    backToForm({});
   });
 
   function setLoading(on) {
     submitBtn.disabled = on;
     submitBtn.classList.toggle("is-loading", on);
-    submitBtn.querySelector(".btn-label").textContent = on ? "Отправка…" : "Зарегистрироваться";
+    submitBtn.querySelector(".btn-label").textContent = on
+      ? "Отправка…"
+      : editUin ? "Сохранить изменения" : "Зарегистрироваться";
   }
 
   function send(values, update) {
@@ -469,7 +513,12 @@
     fetch(SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ sheet: current.sheet, values: values, update: !!update }),
+      body: JSON.stringify({
+        sheet: current.sheet,
+        values: values,
+        update: !!(update || editUin),
+        originalUin: editUin && editUin !== "-" ? editUin : undefined,
+      }),
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
