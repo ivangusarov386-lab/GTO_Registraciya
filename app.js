@@ -447,6 +447,8 @@
       ? "Изменения сохранены. Проверьте данные ещё раз."
       : "Заявка принята. Проверьте данные — если есть ошибка, нажмите «Редактировать».";
 
+    renderReminder();
+
     var d = parseDate(res.date || current.date);
     var rows = [["Дата", d ? d.full + ", " + d.weekday : current.date]];
     if (current.label) rows.push(["Группа", current.label]);
@@ -466,6 +468,19 @@
     doneBox.hidden = false;
     setStep(3);
     doneBox.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Плашка «НЕ ЗАБЫВАЕМ!» — текст в rules.js (window.GTO_REMINDER).
+  function renderReminder() {
+    var box = document.getElementById("reminder");
+    var r = window.GTO_REMINDER || {};
+    var items = (r.items || []).filter(Boolean);
+    box.hidden = !items.length;
+    if (!items.length) return;
+    document.getElementById("reminder-title").textContent = r.title || "Не забудьте";
+    var list = document.getElementById("reminder-list");
+    list.innerHTML = "";
+    items.forEach(function (t) { list.appendChild(el("li", { text: t })); });
   }
 
   // Режим исправления только что отправленной заявки: дата не меняется,
