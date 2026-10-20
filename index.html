@@ -15,65 +15,16 @@
     </header>
 
     <form id="form" novalidate>
-      <label>
-        <span>Дата сдачи</span>
-        <select name="date" id="date" required>
-          <option value="">Загрузка…</option>
-        </select>
-      </label>
+      <fieldset>
+        <legend>Дата сдачи</legend>
+        <div id="dates" class="dates"><p class="muted">Загрузка…</p></div>
+      </fieldset>
 
-      <label>
-        <span>ФИО</span>
-        <input name="fio" id="fio" required autocomplete="name"
-               placeholder="Иванов Иван Иванович">
-      </label>
-
-      <label>
-        <span>УИН</span>
-        <input name="uin" id="uin" required inputmode="numeric" maxlength="13"
-               placeholder="00-00-0000000">
-        <small class="muted">Номер из личного кабинета на gto.ru</small>
-      </label>
-
-      <div class="row">
-        <label>
-          <span>Класс</span>
-          <select name="grade" id="grade" required>
-            <option value="">—</option>
-          </select>
-        </label>
-        <label>
-          <span>Буква</span>
-          <input name="letter" id="letter" required maxlength="1" placeholder="А">
-        </label>
-      </div>
-
-      <div class="row">
-        <label>
-          <span>Ступень</span>
-          <select name="stage" id="stage" required>
-            <option value="">—</option>
-            <option value="1">1 ступень (6–7 лет)</option>
-            <option value="2">2 ступень (8–9 лет)</option>
-            <option value="3">3 ступень (10–11 лет)</option>
-            <option value="4">4 ступень (12–13 лет)</option>
-            <option value="5">5 ступень (14–15 лет)</option>
-            <option value="6">6 ступень (16–17 лет)</option>
-            <option value="7">7 ступень (18–19 лет)</option>
-          </select>
-        </label>
-        <fieldset>
-          <legend>Пол</legend>
-          <div class="toggle">
-            <label><input type="radio" name="gender" value="м" required><span>Муж.</span></label>
-            <label><input type="radio" name="gender" value="ж"><span>Жен.</span></label>
-          </div>
-        </fieldset>
-      </div>
+      <div id="fields" class="fields"></div>
 
       <p id="message" class="message" role="status" hidden></p>
 
-      <button type="submit" id="submit">Зарегистрироваться</button>
+      <button type="submit" id="submit" hidden>Зарегистрироваться</button>
     </form>
   </main>
 

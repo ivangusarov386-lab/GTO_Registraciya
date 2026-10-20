@@ -69,7 +69,6 @@ label > span, legend { font-weight: 600; font-size: .9rem; }
 fieldset { border: 0; padding: 0; min-width: 0; }
 legend { padding: 0; margin-bottom: 6px; }
 
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 input, select {
   width: 100%;
@@ -83,7 +82,7 @@ input, select {
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .invalid { border-color: var(--err-text); }
 
-.toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.toggle { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 6px; }
 .toggle label { display: block; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle span {
@@ -115,6 +114,25 @@ button:disabled { opacity: .6; cursor: wait; }
 .message.ok { background: var(--ok-bg); color: var(--ok-text); }
 .message.err { background: var(--err-bg); color: var(--err-text); }
 
-@media (max-width: 420px) {
-  .row { grid-template-columns: 1fr; }
+
+.fields { display: grid; gap: 16px; }
+.fields:empty { display: none; }
+.hint { margin-top: -2px; }
+
+.dates { display: grid; gap: 8px; }
+.dates label { display: block; }
+.dates input { position: absolute; opacity: 0; pointer-events: none; }
+.dates .date {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
 }
+.dates .date b { font-size: 1.05rem; }
+.dates .date small { color: var(--muted); }
+.dates input:checked + .date { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.dates input:checked + .date small { color: var(--text); }
+.dates input:focus-visible + .date { outline: 2px solid var(--accent); outline-offset: 1px; }

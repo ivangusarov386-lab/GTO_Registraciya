@@ -5,37 +5,20 @@
   var UIN_RE = /^\d{2}-\d{2}-\d{7}$/;
 
   var form = document.getElementById("form");
-  var dateSel = document.getElementById("date");
-  var gradeSel = document.getElementById("grade");
-  var stageSel = document.getElementById("stage");
-  var uinInput = document.getElementById("uin");
-  var letterInput = document.getElementById("letter");
+  var datesBox = document.getElementById("dates");
+  var fieldsBox = document.getElementById("fields");
   var submitBtn = document.getElementById("submit");
   var message = document.getElementById("message");
 
-  for (var g = 1; g <= 11; g++) {
-    gradeSel.add(new Option(g + " класс", g));
-  }
+  var sheets = [];   // описание листов-дат, приходит из Apps Script
+  var current = null; // выбранный лист
 
-  // Подсказка ступени по классу (обычный возраст ученика); можно изменить вручную.
-  var STAGE_BY_GRADE = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 4, 7: 4, 8: 5, 9: 5, 10: 6, 11: 6 };
-  gradeSel.addEventListener("change", function () {
-    var s = STAGE_BY_GRADE[gradeSel.value];
-    if (s) stageSel.value = String(s);
-  });
-
-  // Маска УИН: 00-00-0000000
-  uinInput.addEventListener("input", function () {
-    var d = uinInput.value.replace(/\D/g, "").slice(0, 11);
-    var out = d.slice(0, 2);
-    if (d.length > 2) out += "-" + d.slice(2, 4);
-    if (d.length > 4) out += "-" + d.slice(4);
-    uinInput.value = out;
-  });
-
-  letterInput.addEventListener("input", function () {
-    letterInput.value = letterInput.value.replace(/[^а-яё]/gi, "").toUpperCase().slice(0, 1);
-  });
+  var GENDER_NAMES = { "м": "Муж.", "ж": "Жен." };
+  var PLACEHOLDERS = {
+    fio: "Иванов Иван Иванович",
+    uin: "00-00-0000000",
+    letter: "А",
+  };
 
   function showMessage(text, kind) {
     message.textContent = text;
@@ -43,66 +26,195 @@
     message.hidden = false;
   }
 
-  function loadDates() {
+  function caption(label) {
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  function hideMessage() {
+    message.hidden = true;
+  }
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") node.textContent = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { node.appendChild(c); });
+    return node;
+  }
+
+  /* ---------- Даты ---------- */
+
+  function renderDates() {
+    datesBox.innerHTML = "";
+    if (!sheets.length) {
+      datesBox.appendChild(el("p", { class: "muted", text: "Сейчас нет открытых дат для записи." }));
+      return;
+    }
+    sheets.forEach(function (s, i) {
+      var input = el("input", { type: "radio", name: "sheet", value: String(i) });
+      input.addEventListener("change", function () { selectSheet(i); });
+      var card = el("span", { class: "date" }, [el("b", { text: s.date })]);
+      if (s.label) card.appendChild(el("small", { text: s.label }));
+      datesBox.appendChild(el("label", {}, [input, card]));
+    });
+    if (sheets.length === 1) {
+      datesBox.querySelector("input").checked = true;
+      selectSheet(0);
+    }
+  }
+
+  function selectSheet(i) {
+    // Сохраняем уже введённые значения, если такие же поля есть на другой дате.
+    var prev = current ? collect() : {};
+    current = sheets[i];
+    hideMessage();
+    renderFields(prev);
+    submitBtn.hidden = false;
+  }
+
+  /* ---------- Поля формы ---------- */
+
+  function renderFields(prev) {
+    fieldsBox.innerHTML = "";
+    current.fields.forEach(function (f, i) {
+      var id = "f" + i;
+      var control;
+
+      if (f.options && f.options.length <= 3 && f.kind !== "stage" && f.kind !== "grade") {
+        control = renderToggle(f, id);
+      } else if (f.options) {
+        control = renderSelect(f, id);
+      } else {
+        control = renderInput(f, id);
+      }
+
+      var wrap = control.tagName === "FIELDSET"
+        ? control
+        : el("label", { for: id }, [el("span", { text: caption(f.label) }), control]);
+      if (f.kind === "uin") {
+        wrap.appendChild(el("small", { class: "muted hint", text: "Номер из личного кабинета на gto.ru" }));
+      }
+      fieldsBox.appendChild(wrap);
+      setValue(f, id, prev[f.label]);
+    });
+  }
+
+  function renderSelect(f, id) {
+    var select = el("select", { id: id, name: f.label, required: "" });
+    select.add(new Option("—", ""));
+    f.options.forEach(function (o) {
+      var text = o;
+      if (f.kind === "grade" && /^\d+$/.test(o)) text = o + " класс";
+      if (f.kind === "stage" && /^\d+$/.test(o)) text = o + " ступень";
+      select.add(new Option(text, o));
+    });
+    if (f.options.length === 1) select.value = f.options[0];
+    return select;
+  }
+
+  function renderToggle(f, id) {
+    var group = el("div", { class: "toggle", id: id });
+    f.options.forEach(function (o) {
+      var name = f.kind === "gender" ? GENDER_NAMES[o.toLowerCase()] || o : o;
+      group.appendChild(el("label", {}, [
+        el("input", { type: "radio", name: f.label, value: o }),
+        el("span", { text: name }),
+      ]));
+    });
+    return el("fieldset", {}, [el("legend", { text: caption(f.label) }), group]);
+  }
+
+  function renderInput(f, id) {
+    var input = el("input", { id: id, name: f.label, required: "" });
+    if (PLACEHOLDERS[f.kind]) input.placeholder = PLACEHOLDERS[f.kind];
+    if (f.kind === "fio") input.autocomplete = "name";
+    if (f.kind === "uin") {
+      input.inputMode = "numeric";
+      input.maxLength = 13;
+      input.addEventListener("input", function () {
+        var d = input.value.replace(/\D/g, "").slice(0, 11);
+        var out = d.slice(0, 2);
+        if (d.length > 2) out += "-" + d.slice(2, 4);
+        if (d.length > 4) out += "-" + d.slice(4);
+        input.value = out;
+      });
+    }
+    if (f.kind === "letter") {
+      input.maxLength = 1;
+      input.addEventListener("input", function () {
+        input.value = input.value.replace(/[^а-яё]/gi, "").toUpperCase().slice(0, 1);
+      });
+    }
+    return input;
+  }
+
+  function setValue(f, id, value) {
+    if (value == null || value === "") return;
+    var radio = fieldsBox.querySelector('input[type=radio][name="' + CSS.escape(f.label) + '"][value="' + CSS.escape(value) + '"]');
+    if (radio) { radio.checked = true; return; }
+    var control = document.getElementById(id);
+    if (control.tagName === "SELECT" && f.options.indexOf(value) === -1) return;
+    if (control.tagName !== "DIV") control.value = value;
+  }
+
+  function collect() {
+    var values = {};
+    var fd = new FormData(form);
+    current.fields.forEach(function (f) {
+      values[f.label] = String(fd.get(f.label) || "").replace(/\s+/g, " ").trim();
+    });
+    return values;
+  }
+
+  function validate(values) {
+    var errors = [];
+    fieldsBox.querySelectorAll(".invalid").forEach(function (n) { n.classList.remove("invalid"); });
+    current.fields.forEach(function (f, i) {
+      var v = values[f.label];
+      var problem = null;
+      if (!v) problem = "заполните «" + caption(f.label) + "»";
+      else if (f.kind === "uin" && !UIN_RE.test(v)) problem = "УИН в формате 00-00-0000000";
+      else if (f.kind === "fio" && v.split(" ").length < 2) problem = "укажите фамилию и имя";
+      if (problem) {
+        errors.push(problem);
+        var node = document.getElementById("f" + i);
+        if (node && node.tagName !== "DIV") node.classList.add("invalid");
+      }
+    });
+    return errors;
+  }
+
+  /* ---------- Загрузка и отправка ---------- */
+
+  function load() {
     if (!SCRIPT_URL) {
-      dateSel.innerHTML = '<option value="">Сайт не настроен</option>';
+      datesBox.innerHTML = "";
       showMessage("Не указан адрес Google Apps Script в config.js.", "err");
       return;
     }
-    fetch(SCRIPT_URL + "?action=dates")
+    fetch(SCRIPT_URL)
       .then(function (r) { return r.json(); })
       .then(function (res) {
-        dateSel.innerHTML = "";
-        if (!res.dates || !res.dates.length) {
-          dateSel.add(new Option("Нет доступных дат", ""));
-          return;
-        }
-        dateSel.add(new Option("Выберите дату", ""));
-        res.dates.forEach(function (d) { dateSel.add(new Option(d, d)); });
-        if (res.dates.length === 1) dateSel.value = res.dates[0];
+        if (!res.ok) throw new Error(res.error);
+        sheets = res.sheets || [];
+        renderDates();
       })
       .catch(function () {
-        dateSel.innerHTML = '<option value="">Ошибка загрузки</option>';
+        datesBox.innerHTML = "";
         showMessage("Не удалось загрузить даты сдачи. Обновите страницу.", "err");
       });
   }
 
-  function collect() {
-    var fd = new FormData(form);
-    return {
-      date: fd.get("date") || "",
-      fio: String(fd.get("fio") || "").replace(/\s+/g, " ").trim(),
-      uin: String(fd.get("uin") || "").trim(),
-      stage: fd.get("stage") || "",
-      gender: fd.get("gender") || "",
-      grade: fd.get("grade") || "",
-      letter: String(fd.get("letter") || "").trim().toUpperCase(),
-    };
-  }
-
-  function validate(p) {
-    var errors = [];
-    function bad(id, text) {
-      errors.push(text);
-      var el = document.getElementById(id);
-      if (el) el.classList.add("invalid");
-    }
-    form.querySelectorAll(".invalid").forEach(function (el) { el.classList.remove("invalid"); });
-
-    if (!p.date) bad("date", "выберите дату сдачи");
-    if (p.fio.split(" ").length < 2) bad("fio", "укажите фамилию и имя");
-    if (!UIN_RE.test(p.uin)) bad("uin", "УИН в формате 00-00-0000000");
-    if (!p.grade) bad("grade", "выберите класс");
-    if (!/^[А-ЯЁ]$/.test(p.letter)) bad("letter", "укажите букву класса");
-    if (!p.stage) bad("stage", "выберите ступень");
-    if (!p.gender) errors.push("укажите пол");
-    return errors;
-  }
-
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    var p = collect();
-    var errors = validate(p);
+    if (!current) {
+      showMessage("Выберите дату сдачи.", "err");
+      return;
+    }
+    var values = collect();
+    var errors = validate(values);
     if (errors.length) {
       showMessage("Проверьте форму: " + errors.join(", ") + ".", "err");
       return;
@@ -115,15 +227,14 @@
     fetch(SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(p),
+      body: JSON.stringify({ sheet: current.sheet, values: values }),
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (res.ok) {
-          showMessage(p.fio + " записан(а) на " + res.date + ". Номер в списке: " + res.number + ".", "ok");
-          var keepDate = dateSel.value;
-          form.reset();
-          dateSel.value = keepDate;
+          var fio = values[(current.fields.filter(function (f) { return f.kind === "fio"; })[0] || {}).label];
+          showMessage((fio || "Участник") + " записан(а) на " + res.title + ". Номер в списке: " + res.number + ".", "ok");
+          renderFields({});
         } else {
           showMessage(res.error || "Ошибка регистрации.", "err");
         }
@@ -137,5 +248,5 @@
       });
   });
 
-  loadDates();
+  load();
 })();
