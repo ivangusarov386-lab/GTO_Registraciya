@@ -106,8 +106,11 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .toggle input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
 .toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-button {
+button, .button {
+  display: block;
   padding: 13px;
+  text-align: center;
+  text-decoration: none;
   border: 0;
   border-radius: 10px;
   background: var(--accent);
@@ -116,10 +119,11 @@ button {
   font-weight: 700;
   cursor: pointer;
 }
-button, label, select { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button, .button, label, select { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) {
   button:hover { background: var(--accent-dark); }
-  }
+  .secondary:hover, button.secondary:hover { background: var(--bg); }
+}
 button:disabled { opacity: .6; cursor: wait; }
 
 .message { margin: 0; padding: 12px 14px; border-radius: 10px; }
@@ -202,7 +206,7 @@ button:disabled { opacity: .6; cursor: wait; }
   border-top: 1px solid var(--border);
   flex: none;
 }
-button.secondary {
+button.secondary, .button.secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);

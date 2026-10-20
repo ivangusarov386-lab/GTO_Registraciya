@@ -80,7 +80,7 @@
     }
   }
 
-  // При первом выборе даты сначала показываем информационное окно, поля — после «С правилами ознакомился».
+  // При первом выборе даты сначала показываем информационное окно, поля — после «На сайте ГТО зарегистрирован».
   function chooseSheet(i) {
     if (rulesAccepted) {
       selectSheet(i);
@@ -318,10 +318,6 @@
     var cb = onAccept;
     onAccept = null;
     if (cb) cb();
-  });
-
-  document.getElementById("rules-cancel").addEventListener("click", function () {
-    rulesDialog.close();
   });
 
   rulesDialog.addEventListener("close", function () {
