@@ -310,7 +310,7 @@
   }
 
   // Показывает данные. Если дата уже выбрана — сохраняет выбор и введённые значения.
-  function applyData(data) {
+  function applyData(data, lostMessage) {
     var json = JSON.stringify(data);
     if (json === shownJson) return;
     if (document.querySelector("dialog[open]")) { pendingData = data; return; }
@@ -334,7 +334,7 @@
       submitBtn.hidden = true;
       setEditMode(null);
       setStep(1);
-      showMessage("Список дат обновился — выберите дату ещё раз.", "info");
+      showMessage(lostMessage || "Список дат обновился — выберите дату ещё раз.", lostMessage ? "err" : "info");
       return;
     }
     datesBox.querySelectorAll("input")[idx].checked = true;
@@ -352,21 +352,27 @@
     var cached = readCache();
     if (cached) applyData(cached);
 
+    fetchFresh().catch(function () {
+      if (cached) return; // даты уже показаны из памяти браузера
+      datesBox.innerHTML = "";
+      showMessage("Не удалось загрузить даты сдачи. Проверьте интернет и обновите страницу.", "err");
+    });
+  }
+
+  // Загружает актуальные даты из таблицы. lostMessage — что сказать, если выбранной даты больше нет.
+  function fetchFresh(lostMessage) {
     // Google Apps Script после простоя отвечает несколько секунд; если ответа нет 30 с — сообщаем об ошибке.
     var controller = window.AbortController ? new AbortController() : null;
     var timer = setTimeout(function () { if (controller) controller.abort(); }, 30000);
-    fetch(SCRIPT_URL, controller ? { signal: controller.signal } : {})
+    return fetch(SCRIPT_URL, controller ? { signal: controller.signal } : {})
       .then(function (r) { clearTimeout(timer); return r.json(); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.error);
         writeCache(res);
-        applyData(res);
-      })
-      .catch(function () {
+        applyData(res, lostMessage);
+      }, function (err) {
         clearTimeout(timer);
-        if (cached) return; // даты уже показаны из памяти браузера
-        datesBox.innerHTML = "";
-        showMessage("Не удалось загрузить даты сдачи. Проверьте интернет и обновите страницу.", "err");
+        throw err;
       });
   }
 
@@ -599,6 +605,11 @@
       .then(function (res) {
         if (res.ok) {
           showDone(values, res);
+        } else if (res.closed) {
+          // Запись на дату закрыли, пока страница была открыта, — обновляем список дат.
+          showMessage(res.error, "err");
+          shownJson = null;
+          fetchFresh(res.error).catch(function () {});
         } else if (res.exists) {
           askEdit(res, function () { send(values, true); });
         } else {

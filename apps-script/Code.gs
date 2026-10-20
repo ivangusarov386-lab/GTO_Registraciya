@@ -14,6 +14,10 @@
  * Если участник с таким УИН уже записан на эту дату, сайт спрашивает, хотите ли
  * отредактировать данные, и при согласии перезаписывает его строку (№ сохраняется).
  * Остальные листы («Основной» — шаблон, «Правила») скрипт не изменяет.
+ *
+ * Запись на дату закрыта (дата не показывается на сайте), если лист скрыт или в его
+ * названии есть слово «закрыто», например «23.11.26 (3-4 классы) [закрыто]».
+ * Удобнее всего — через меню таблицы «ГТО → Закрыть / Открыть запись на эту дату».
  */
 
 var RULES_SHEET = 'Правила';
@@ -49,8 +53,44 @@ function onEdit() {
 // (эти действия не вызывают onEdit) можно обновить сайт сразу, не дожидаясь 5 минут.
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('ГТО')
+    .addItem('Закрыть запись на эту дату', 'closeRegistration')
+    .addItem('Открыть запись на эту дату', 'openRegistration')
+    .addSeparator()
     .addItem('Обновить данные на сайте', 'refreshSite')
     .addToUi();
+}
+
+var CLOSED_MARK = ' [закрыто]';
+var CLOSED_RE = /\s*\[?\s*закрыт[а-я]*\s*\]?/i;
+
+function isClosed_(sheet) {
+  return sheet.isSheetHidden() || CLOSED_RE.test(sheet.getName());
+}
+
+// Меню «Закрыть запись на эту дату»: к названию активного листа добавляется « [закрыто]».
+function closeRegistration() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  if (!parseSheetName_(sheet.getName())) {
+    ss.toast('Сначала откройте лист с датой сдачи.', 'ГТО', 5);
+    return;
+  }
+  if (!CLOSED_RE.test(sheet.getName())) sheet.setName(sheet.getName() + CLOSED_MARK);
+  clearCache_();
+  ss.toast('Запись закрыта: дата больше не показывается на сайте.', 'ГТО', 5);
+}
+
+// Меню «Открыть запись на эту дату»: из названия убирается пометка о закрытии.
+function openRegistration() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  if (!parseSheetName_(sheet.getName())) {
+    ss.toast('Сначала откройте лист с датой сдачи.', 'ГТО', 5);
+    return;
+  }
+  sheet.setName(sheet.getName().replace(CLOSED_RE, '').trim());
+  clearCache_();
+  ss.toast('Запись открыта: дата снова показывается на сайте.', 'ГТО', 5);
 }
 
 function refreshSite() {
@@ -75,7 +115,10 @@ function doPost(e) {
 
     var sheet = ss.getSheetByName(String(data.sheet || ''));
     if (!sheet || !parseSheetName_(sheet.getName()) || isPast_(sheet.getName())) {
-      return json_({ ok: false, error: 'Дата сдачи не найдена. Обновите страницу.' });
+      return json_({ ok: false, closed: true, error: 'Запись на эту дату закрыта. Выберите другую дату.' });
+    }
+    if (isClosed_(sheet)) {
+      return json_({ ok: false, closed: true, error: 'Запись на эту дату закрыта. Выберите другую дату.' });
     }
 
     var form = describeSheet_(sheet);
@@ -109,7 +152,7 @@ function doPost(e) {
 
 function listDateSheets_() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets()
-    .filter(function (s) { return parseSheetName_(s.getName()) && !isPast_(s.getName()); })
+    .filter(function (s) { return parseSheetName_(s.getName()) && !isPast_(s.getName()) && !isClosed_(s); })
     .sort(function (a, b) {
       return parseSheetName_(a.getName()).time - parseSheetName_(b.getName()).time;
     });
