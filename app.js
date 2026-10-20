@@ -31,6 +31,16 @@
     message.hidden = false;
   }
 
+  // Открыть окно и заблокировать прокрутку страницы под ним.
+  function openModal(dialog) {
+    document.documentElement.classList.add("modal-open");
+    dialog.showModal();
+  }
+
+  document.addEventListener("close", function () {
+    if (!document.querySelector("dialog[open]")) document.documentElement.classList.remove("modal-open");
+  }, true);
+
   function caption(label) {
     return label.charAt(0).toUpperCase() + label.slice(1);
   }
@@ -276,16 +286,17 @@
       list = null;
       var step = /^(\d+)[.)]\s*([\s\S]+)$/.exec(line);
       if (step) {
-        rulesText.appendChild(el("h3", {}, [
+        var warn = step[2].indexOf("!!!") !== -1;
+        rulesText.appendChild(el("h3", warn ? { class: "warn" } : {}, [
           el("span", { class: "step", text: step[1] }),
-          linkify(el("span"), step[2]),
+          linkify(el("span"), warn ? step[2].replace(/!!!/g, "!") : step[2]),
         ]));
       } else {
         rulesText.appendChild(linkify(el("p"), line));
       }
     });
+    openModal(rulesDialog);
     rulesText.scrollTop = 0;
-    rulesDialog.showModal();
   }
 
   // Добавляет в node текст, превращая адреса сайтов в ссылки.
@@ -335,7 +346,7 @@
     });
     confirmText.appendChild(list);
     confirmText.appendChild(el("p", { text: "Хотите отредактировать данные? Они будут заменены на введённые в форме." }));
-    confirmDialog.showModal();
+    openModal(confirmDialog);
   }
 
   document.getElementById("confirm-yes").addEventListener("click", function () {
