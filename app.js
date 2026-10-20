@@ -15,6 +15,7 @@
 
   var sheets = [];   // описание листов-дат, приходит из Apps Script
   var rules = [];    // абзацы текста правил с листа «Правила»
+  var rulesAccepted = false;
   var current = null; // выбранный лист
 
   var GENDER_NAMES = { "м": "Муж.", "ж": "Жен." };
@@ -58,15 +59,34 @@
     }
     sheets.forEach(function (s, i) {
       var input = el("input", { type: "radio", name: "sheet", value: String(i) });
-      input.addEventListener("change", function () { selectSheet(i); });
+      input.addEventListener("change", function () { chooseSheet(i); });
       var card = el("span", { class: "date" }, [el("b", { text: s.date })]);
       if (s.label) card.appendChild(el("span", { class: "label", text: s.label }));
       datesBox.appendChild(el("label", {}, [input, card]));
     });
     if (sheets.length === 1) {
       datesBox.querySelector("input").checked = true;
-      selectSheet(0);
+      chooseSheet(0);
     }
+  }
+
+  // При первом выборе даты сначала показываем информационное окно, поля — после «С правилами ознакомился».
+  function chooseSheet(i) {
+    if (rulesAccepted) {
+      selectSheet(i);
+      return;
+    }
+    openRules(function () {
+      rulesAccepted = true;
+      selectSheet(i);
+    });
+  }
+
+  // Окно закрыли без согласия — возвращаем выбор даты как было.
+  function revertDate() {
+    datesBox.querySelectorAll("input").forEach(function (input) {
+      input.checked = !!current && sheets[Number(input.value)] === current;
+    });
   }
 
   function selectSheet(i) {
@@ -229,12 +249,10 @@
     }
     hideMessage();
 
-    // Информационное окно показывается всегда; если на листе есть столбец «Правила», в нём отмечается согласие.
+    // С информационным окном участник уже ознакомился при выборе даты.
     var rulesField = current.fields.filter(function (f) { return f.kind === "rules"; })[0];
-    openRules(function () {
-      if (rulesField) values[rulesField.label] = true;
-      send(values);
-    });
+    if (rulesField) values[rulesField.label] = true;
+    send(values);
   });
 
   /* ---------- Окно с правилами ---------- */
@@ -291,11 +309,15 @@
   });
 
   document.getElementById("rules-cancel").addEventListener("click", function () {
-    onAccept = null;
     rulesDialog.close();
   });
 
-  rulesDialog.addEventListener("cancel", function () { onAccept = null; });
+  rulesDialog.addEventListener("close", function () {
+    if (onAccept) {
+      onAccept = null;
+      revertDate();
+    }
+  });
 
   /* ---------- Окно «Хотите отредактировать данные?» ---------- */
 
