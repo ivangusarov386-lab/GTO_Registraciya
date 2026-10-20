@@ -496,7 +496,26 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
   flex-direction: column;
   overscroll-behavior: contain;
 }
+.modal:not([open]) { display: none; }
 .modal[open] { display: flex; animation: pop .22s ease both; }
+/* Браузеры без поддержки <dialog>: окно по центру экрана и затемнение вручную */
+.no-dialog .modal[open] {
+  position: fixed;
+  z-index: 1001;
+  left: 0;
+  right: 0;
+  top: 50%;
+  margin: 0 auto;
+  transform: translateY(-50%);
+  animation: none;
+}
+.no-dialog.modal-open body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--backdrop);
+}
 .modal::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
 
 .modal-head { display: flex; align-items: center; gap: 12px; padding: 22px 26px 14px; flex: none; }

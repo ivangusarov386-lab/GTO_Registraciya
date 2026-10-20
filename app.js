@@ -41,10 +41,33 @@
     message.hidden = false;
   }
 
+  // Запасной вариант для браузеров без <dialog> (iOS до 15.4, встроенные браузеры
+  // мессенджеров): окно показывается через атрибут open и CSS, событие close — вручную.
+  var nativeDialog = typeof document.createElement("dialog").showModal === "function";
+  if (!nativeDialog) {
+    document.documentElement.classList.add("no-dialog");
+    Array.prototype.forEach.call(document.querySelectorAll("dialog"), function (d) {
+      d.showModal = function () { d.setAttribute("open", ""); d.open = true; };
+      d.close = function () {
+        if (!d.hasAttribute("open")) return;
+        d.removeAttribute("open");
+        d.open = false;
+        var ev = document.createEvent("Event");
+        ev.initEvent("close", false, false);
+        d.dispatchEvent(ev);
+      };
+    });
+  }
+
   // Открыть окно и заблокировать прокрутку страницы под ним.
   function openModal(dialog) {
     document.documentElement.classList.add("modal-open");
-    dialog.showModal();
+    if (dialog.hasAttribute("open")) return; // уже открыто
+    try {
+      dialog.showModal();
+    } catch (e) {
+      dialog.setAttribute("open", ""); // на случай ошибки в браузере — всё равно показываем
+    }
   }
 
   document.addEventListener("close", function () {
@@ -446,9 +469,10 @@
   }
 
   document.getElementById("rules-accept").addEventListener("click", function () {
-    rulesDialog.close();
+    // Сначала забираем действие, потом закрываем: событие close не должно принять это за отказ.
     var cb = onAccept;
     onAccept = null;
+    rulesDialog.close();
     if (cb) cb();
   });
 
@@ -479,9 +503,10 @@
   }
 
   document.getElementById("confirm-yes").addEventListener("click", function () {
-    confirmDialog.close();
+    // Сначала забираем действие, потом закрываем: событие close не должно принять это за отказ.
     var cb = onConfirm;
     onConfirm = null;
+    confirmDialog.close();
     if (cb) cb();
   });
 
