@@ -279,8 +279,11 @@
       showMessage("Не указан адрес Google Apps Script в config.js.", "err");
       return;
     }
-    fetch(SCRIPT_URL)
-      .then(function (r) { return r.json(); })
+    // Google Apps Script после простоя отвечает несколько секунд; если ответа нет 30 с — сообщаем об ошибке.
+    var controller = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (controller) controller.abort(); }, 30000);
+    fetch(SCRIPT_URL, controller ? { signal: controller.signal } : {})
+      .then(function (r) { clearTimeout(timer); return r.json(); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.error);
         sheets = res.sheets || [];
@@ -288,8 +291,9 @@
         renderDates();
       })
       .catch(function () {
+        clearTimeout(timer);
         datesBox.innerHTML = "";
-        showMessage("Не удалось загрузить даты сдачи. Обновите страницу.", "err");
+        showMessage("Не удалось загрузить даты сдачи. Проверьте интернет и обновите страницу.", "err");
       });
   }
 
