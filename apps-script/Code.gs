@@ -13,13 +13,16 @@
  *     Текст окна — в rules.js на сайте; если заполнен лист «Правила» (столбец A), берётся оттуда.
  * Если участник с таким УИН уже записан на эту дату, сайт спрашивает, хотите ли
  * отредактировать данные, и при согласии перезаписывает его строку (№ сохраняется).
- * Остальные листы («Основной» — шаблон, «Правила») скрипт не изменяет.
+ * Заявки пишутся только в A:I листов дат; J:K — аналитика по классам.
+ * Меню аналитики устанавливает формулы также на шаблон «Основной».
  *
  * Запись на дату закрыта (дата не показывается на сайте), если лист скрыт или в его
  * названии есть слово «закрыто», например «23.11.26 (3-4 классы) [закрыто]».
  * Удобнее всего — через меню таблицы «ГТО → Закрыть / Открыть запись на эту дату».
  */
 
+var REGISTRATION_COLUMNS = 9; // A:I; начиная с J — аналитика, не поля анкеты.
+var ANALYTICS_NOTE = 'gto-class-analytics-v1';
 var RULES_SHEET = 'Правила';
 var RULES_ACCEPTED = 'Ознакомлен';
 var DATE_PREFIX_RE = /^(\d{2})\.(\d{2})\.(\d{2})\b\s*(.*)$/;
@@ -57,6 +60,7 @@ function onOpen() {
     .addItem('Открыть запись на эту дату', 'openRegistration')
     .addSeparator()
     .addItem('Обновить данные на сайте', 'refreshSite')
+    .addItem('Настроить аналитику по классам', 'setupClassAnalytics')
     .addToUi();
 }
 
@@ -148,6 +152,56 @@ function doPost(e) {
   }
 }
 
+// Формулы используют только текущий лист: при копировании шаблона ссылки остаются локальными.
+function classAnalyticsFormula_(headers) {
+  function column(kind) {
+    for (var i = 0; i < headers.length; i++) {
+      if (kindOf_(headers[i]) === kind) return String.fromCharCode(65 + i);
+    }
+    return null;
+  }
+  var grade = column('grade');
+  var identity = column('uin') || column('fio');
+  var letter = column('letter');
+  if (!grade || !identity) throw new Error('Нужны столбцы «Класс» и «УИН» (или «ФИО») в A:I.');
+  var classes = 'TRIM(TO_TEXT(' + grade + '2:' + grade + ')' +
+    (letter ? '&UPPER(TRIM(' + letter + '2:' + letter + '))' : '') + ')';
+  var query = "select Col1, count(Col2) where Col2 is not null and Col1 <> '' " +
+    "group by Col1 order by Col1 label Col1 'Класс', count(Col2) 'Количество зарегистрированных'";
+  return '=IFERROR(QUERY(HSTACK(ARRAYFORMULA(' + classes + '),' + identity + '2:' + identity + '),' +
+    JSON.stringify(query) + ',0),HSTACK("Класс","Количество зарегистрированных"))';
+}
+
+// Однократная установка на шаблон и все даты, включая закрытые и прошедшие.
+// До первой записи проверяем все листы, чтобы не затереть существующие данные справа.
+function setupClassAnalytics() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var plans = ss.getSheets().filter(function (sheet) {
+    return sheet.getName() === 'Основной' || !!parseSheetName_(sheet.getName());
+  }).map(function (sheet) {
+    var formula = classAnalyticsFormula_(getHeaders_(sheet));
+    if (sheet.getMaxColumns() >= 10) {
+      var width = Math.min(2, sheet.getMaxColumns() - 9);
+      var area = sheet.getRange(1, 10, sheet.getMaxRows(), width);
+      if (sheet.getRange(1, 10).getNote() !== ANALYTICS_NOTE && !area.isBlank()) {
+        throw new Error('Лист «' + sheet.getName() + '»: J:K заняты. Перенесите данные перед установкой аналитики.');
+      }
+    }
+    return { sheet: sheet, formula: formula };
+  });
+  plans.forEach(function (plan) {
+    var sheet = plan.sheet;
+    if (sheet.getMaxColumns() < 11) sheet.insertColumnsAfter(sheet.getMaxColumns(), 11 - sheet.getMaxColumns());
+    if (sheet.getMaxRows() < 2) sheet.insertRowsAfter(1, 1);
+    sheet.getRange(1, 10).setFormula(plan.formula).setNote(ANALYTICS_NOTE);
+    sheet.getRange(1, 10, 1, 2).setFontWeight('bold').setBackground('#e8eefb');
+    sheet.setColumnWidth(10, 100);
+    sheet.setColumnWidth(11, 240);
+  });
+  clearCache_();
+  ss.toast('Аналитика установлена на листах: ' + plans.length + '. Новые копии наследуют формулу.', 'ГТО', 7);
+}
+
 /* ---------- Чтение структуры листов ---------- */
 
 function listDateSheets_() {
@@ -213,7 +267,7 @@ function isPast_(name) {
 }
 
 function getHeaders_(sheet) {
-  var lastCol = sheet.getLastColumn();
+  var lastCol = Math.min(sheet.getLastColumn(), REGISTRATION_COLUMNS);
   if (lastCol === 0) return [];
   return sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0]
     .map(function (h) { return String(h).trim(); });
