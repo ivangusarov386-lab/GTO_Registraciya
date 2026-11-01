@@ -36,7 +36,7 @@ function sheet(name, occupied = false, owned = false) {
   };
 }
 function attach(context, sheets) {
-  context.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheets: () => sheets, toast() {} }) };
+  context.SpreadsheetApp = { getActiveSpreadsheet: () => ({ getSheets: () => sheets, getSpreadsheetLocale: () => 'ru_RU', toast() {} }) };
   context.clearCache_ = () => {};
 }
 test('formula groups local grade + letter and counts nonempty UIN', () => {
@@ -85,4 +85,20 @@ test('analytics cannot become form headers, append phantom registrations or be o
   assert.equal(write.col, 1);
   assert.equal(write.cols, 9);
   assert.equal(write.values[0][1], 'Иванов Иван');
+});
+
+test('Russian locale uses semicolons without changing QUERY punctuation', () => {
+  const c = load();
+  const f = c.classAnalyticsFormula_(headers, 'ru_RU');
+  assert.ok(f.includes(';C2:C);"select Col1, count(Col2)'));
+  assert.ok(f.includes("label Col1 'Класс', count(Col2)"));
+  assert.ok(f.endsWith(';0);HSTACK("Класс";"Количество зарегистрированных"))'));
+  assert.equal(c.classAnalyticsFormula_(headers, 'en_US'), c.classAnalyticsFormula_(headers));
+});
+test('replaces previously installed broken formula on all sheets using spreadsheet locale', () => {
+  const c = load();
+  const sheets = ['Основной', '23.11.26', '14.12.26'].map(n => sheet(n, true, true));
+  attach(c, sheets);
+  c.setupClassAnalytics();
+  for (const s of sheets) assert.ok(s.calls[0].f.includes(';C2:C)'));
 });

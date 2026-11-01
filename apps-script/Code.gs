@@ -153,7 +153,10 @@ function doPost(e) {
 }
 
 // Формулы используют только текущий лист: при копировании шаблона ссылки остаются локальными.
-function classAnalyticsFormula_(headers) {
+function classAnalyticsFormula_(headers, locale) {
+  // В локалях с десятичной запятой аргументы формул разделяются точкой с запятой.
+  var separator = new Intl.NumberFormat(String(locale || 'en_US').replace(/_/g, '-'))
+    .format(1.1).indexOf(',') !== -1 ? ';' : ',';
   function column(kind) {
     for (var i = 0; i < headers.length; i++) {
       if (kindOf_(headers[i]) === kind) return String.fromCharCode(65 + i);
@@ -168,8 +171,9 @@ function classAnalyticsFormula_(headers) {
     (letter ? '&UPPER(TRIM(' + letter + '2:' + letter + '))' : '') + ')';
   var query = "select Col1, count(Col2) where Col2 is not null and Col1 <> '' " +
     "group by Col1 order by Col1 label Col1 'Класс', count(Col2) 'Количество зарегистрированных'";
-  return '=IFERROR(QUERY(HSTACK(ARRAYFORMULA(' + classes + '),' + identity + '2:' + identity + '),' +
-    JSON.stringify(query) + ',0),HSTACK("Класс","Количество зарегистрированных"))';
+  return '=IFERROR(QUERY(HSTACK(ARRAYFORMULA(' + classes + ')' + separator + identity + '2:' + identity + ')' +
+    separator + JSON.stringify(query) + separator + '0)' + separator +
+    'HSTACK("Класс"' + separator + '"Количество зарегистрированных"))';
 }
 
 // Однократная установка на шаблон и все даты, включая закрытые и прошедшие.
@@ -179,7 +183,7 @@ function setupClassAnalytics() {
   var plans = ss.getSheets().filter(function (sheet) {
     return sheet.getName() === 'Основной' || !!parseSheetName_(sheet.getName());
   }).map(function (sheet) {
-    var formula = classAnalyticsFormula_(getHeaders_(sheet));
+    var formula = classAnalyticsFormula_(getHeaders_(sheet), ss.getSpreadsheetLocale());
     if (sheet.getMaxColumns() >= 10) {
       var width = Math.min(2, sheet.getMaxColumns() - 9);
       var area = sheet.getRange(1, 10, sheet.getMaxRows(), width);
